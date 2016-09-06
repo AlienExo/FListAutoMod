@@ -459,6 +459,7 @@ namespace CogitoMini
 					int chanIndex = -1;
 					if (m.args[m.args.Length - 1] == "<=" && int.TryParse(m.args[m.args.Length], out chanIndex)) {
 						if (chanIndex <= Core.joinedChannels.Count) { m.sourceChannel = Core.joinedChannels[chanIndex]; }
+						m.args = m.args.Take(m.args.Length - 2).ToArray();
 					}
 				}
 				if (m.sourceChannel != null) { if (m.sourceChannel.Mods.Contains(m.sourceUser)) { m.AccessLevel++; } }

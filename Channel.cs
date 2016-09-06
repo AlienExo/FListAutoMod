@@ -43,15 +43,18 @@ namespace CogitoMini {
 		internal int joinIndex = -1;
 		[NonSerialized]
 		internal Queue<Incident> modMessageQueue = new Queue<Incident>();
+		[NonSerialized]
+		internal List<string> WhitelistQueue = new List<string>();
 
 		[OnDeserialized]
 		private void SetValuesOnDeserialized(StreamingContext context) {
 			Mods = new HashSet<User>();
 			Users = new HashSet<User>();
 			modMessageQueue = new Queue<Incident>();
-        }
+			WhitelistQueue = new List<string>();
+		}
 
-		internal HashSet<string> whitelist = new HashSet<string>();
+		internal HashSet<string> Whitelist = new HashSet<string>();
 
 		//internal bool hasCustomSettings = false;
 		public int userCount { get { return Math.Max(_userCount, Users.Count); } set { userCount = value; } }

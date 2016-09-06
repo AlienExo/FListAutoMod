@@ -6,7 +6,7 @@ using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-//using HtmlAgilityPack;
+using HtmlAgilityPack;
 using Newtonsoft.Json;
 
 namespace CogitoMini {
@@ -151,13 +151,13 @@ namespace CogitoMini {
 		/// </summary>
 		public async Task GetBasicProfileInfo(bool useAPIv2 = false) { //TODO This function doesn't run async. Why?
 			string targetAPI = useAPIv2 ? Config.URLConstants.V2.CharacterInfo : Config.URLConstants.V1.CharacterInfo;
-			if ((DateTime.Now - Account.LoginKey.ticketTaken) >= Config.AppSettings.ticketLifetime) { Account.getTicket(); }
 			Dictionary<string, string> ProfileData = new Dictionary<string, string>();
 			FListAPI.CharacterResponseBase DataDigest = new FListAPI.CharacterResponseBase();
 			IEnumerable<FListAPI.Item> Members = null;
 
 			System.Collections.Specialized.NameValueCollection FormData = new System.Collections.Specialized.NameValueCollection();
 			FormData.Add("name", WebUtility.HtmlEncode(Name));
+			if ((DateTime.Now - Account.LoginKey.ticketTaken) >= Config.AppSettings.ticketLifetime) { Account.getTicket(); }
 			FormData.Add("ticket", WebUtility.HtmlEncode(Account.LoginKey.ticket));
 			FormData.Add("account", WebUtility.HtmlEncode(System.Configuration.ConfigurationManager.AppSettings.Get("account")));
 			if (useAPIv2) { FormData.Add("infotags", "1"); }
@@ -165,21 +165,25 @@ namespace CogitoMini {
 			FormHeaders.Add(HttpRequestHeader.ContentType, "application/x-www-form-urlencoded");
 
 			WebClient w = new WebClient();
-				w.Headers = FormHeaders;
-				if (useAPIv2) { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv2>(System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData))); }
-				else { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv1>(System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData))); }
-				if (DataDigest.error.Length > 0) { //gotta go HTML
-					Console.WriteLine("API Error: " + DataDigest.error);
-					FormHeaders.Add(HttpRequestHeader.Cookie, "warning=1");
-					FormHeaders.Remove(HttpRequestHeader.ContentType);
-					string profile = await w.DownloadStringTaskAsync(new Uri(Config.URLConstants.ProfileRoot + WebUtility.HtmlEncode(Name))).ConfigureAwait(false);
-					profile = WebUtility.HtmlDecode(profile);
-					if (profile.IndexOf("<div class='itgroup'>") > 0) { profile = profile.Substring(profile.IndexOf("<div class='itgroup'>")); }
-					MatchCollection dataTags = new Regex(@"<span class=""taglabel"">(?<key>.*?):</span>(?<value>.*?)<br/>").Matches(profile);
-					foreach (Match profileitem in dataTags) { if (profileitem.Groups["key"].Success && profileitem.Groups["value"].Success) { ProfileData.Add(profileitem.Groups["key"].Value, profileitem.Groups["value"].Value); } }
-				}
+			w.Headers = FormHeaders;
+			if (useAPIv2) { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv2>(System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData))); }
+			else { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv1>(System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData))); }
+			
+			if (DataDigest.error.Length > 0) { //gotta go HTML
+				Console.WriteLine("API Error: " + DataDigest.error);
+				FormHeaders.Add(HttpRequestHeader.Cookie, "warning=1");
+				FormHeaders.Remove(HttpRequestHeader.ContentType);
+				string profile = await w.DownloadStringTaskAsync(new Uri(Config.URLConstants.ProfileRoot + WebUtility.HtmlEncode(Name))).ConfigureAwait(false);
+				HtmlDocument profileDoc = new HtmlDocument();
+				profileDoc.LoadHtml(profile);
+				//profile = WebUtility.HtmlDecode(profile);
+				//if (profile.IndexOf("<div class='itgroup'>") > 0) { profile = profile.Substring(profile.IndexOf("<div class='itgroup'>")); }
+				string PTag = profileDoc.DocumentNode.Descendants("div").Where(d => d.Attributes.Contains("class") && d.Attributes["class"].Value == "itgroup").First().ToString();
+				MatchCollection dataTags = new Regex(@"<span class=""taglabel"">(?<key>.*?):</span>(?<value>.*?)<br/>").Matches(PTag);
+				foreach (Match profileitem in dataTags) { if (profileitem.Groups["key"].Success && profileitem.Groups["value"].Success) { ProfileData.Add(profileitem.Groups["key"].Value, profileitem.Groups["value"].Value); } }
+			}
 			w.Dispose();
-			//lock (UserLock) {
+			lock (UserLock) {
 				Age = 0;
 				if (useAPIv2) { //nice, direct parsing that isn't online yet because fuck you
 					FListAPI.Infotags CharInfo = ((FListAPI.CharacterDataAPIv2)DataDigest).infotags;
@@ -205,7 +209,7 @@ namespace CogitoMini {
 					}
 				}
 				dataTakenOn = DateTime.Now; //sets the flag
-			//}
+			}
 		}
 
 		internal void MessageReceived(IO.Message m) {
@@ -217,15 +221,15 @@ namespace CogitoMini {
 		}
 
 		internal async void CheckAge(Channel c) {
+			if (c.Whitelist.Contains(Name)) { return; }
 			if ((DateTime.Now - dataTakenOn) >= Config.AppSettings.userProfileRefreshPeriod) { await GetBasicProfileInfo(); }
 			//await GetBasicProfileInfo();
 			//Console.WriteLine(string.Format("User {0} has entered channel {1}. User age is {2}, channel minage is {3}", Name, c.Name, Age, c.minAge));
 			if (Age <= 0 && c.underageResponse != UnderageReponse.Ignore) {
-				if (c.whitelist.Contains(Name)) {
-					c.ChannelLog.Log("Whitelisted User '" + Name + "' joined Channel " + c.Name + "[" + c.Key + "]");
-					return;
-				}
-				c.TryAlertMod(Name, string.Format("Cannot parse age of User '{0}' joining channel '{1}' (minimum age set to {2}). Please verify.", Name, c.Name, c.minAge));
+				int QueuePosition = c.WhitelistQueue.Contains(Name) ? c.WhitelistQueue.IndexOf(Name) : c.WhitelistQueue.Count;
+				int ChannelInteger = Core.joinedChannels.Contains(c) ? Core.joinedChannels.IndexOf(c) : -1;
+				if (ChannelInteger == -1) { throw new InvalidOperationException("Target Channel " + c.Name + " is not registered in Core.joinedChannels and should not be being monitored..."); }
+				c.TryAlertMod(Name, string.Format("Cannot parse age of User '{0}' joining channel '{1}' (minimum age set to {2}). Please verify.\n In case of false positive, please respond with '.whitelist {3} => {4}'. [BETA]", Name, c.Name, c.minAge, QueuePosition, ChannelInteger));
 				if (Age == -1) { Core.ErrorLog.Log("Age check failed for user " + Name + "; check subroutine."); return; }
 				return;
 			}
@@ -240,12 +244,13 @@ namespace CogitoMini {
 						break;
 
 					case UnderageReponse.Kick:
-						this.Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}' and have been removed. You are welcome to join with an of-age character. Have a nice day.", Name, c.minAge, c.Name));
+						Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}' and will be removed. You are welcome to join with an of-age character. Have a nice day.", Name, c.minAge, c.Name));
 						c.Kick(this);
 						break;
 
 					case UnderageReponse.Warn:
-						this.Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}'. Please leave.", Name, c.minAge, c.Name));
+						c.Message(string.Format("This is an automated message. User '{0}' is below the minimum age ({1}) for channel '{2}'. Please leave or return with an of-age character.", Name, c.minAge, c.Name));
+						//c.TryAlertMod(Name, string.Format("[b]Warning![/b] User '{0}' is below minimum age ({1}) for channel '{2}'. User has been warned.", Name, c.minAge, c.Name));
 						break;
 				}
 			}

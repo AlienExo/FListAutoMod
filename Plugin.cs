@@ -90,6 +90,9 @@ namespace CogitoMini {
 			AddInternalPlugin<Scan>();
 			AddInternalPlugin<RainbowText>();
 			AddInternalPlugin<Horoscopes>();
+			AddInternalPlugin<Whitelist>();
+			AddInternalPlugin<Remote>();
+
 		}
 
 		private static void AddInternalPlugin<T>() where T: CogitoPlugin, new() {
@@ -355,6 +358,42 @@ namespace CogitoMini {
 				else { m.Reply(m.Body); }
 			}
 
+		}// plugin DEFAULT
+
+		sealed class Whitelist : CogitoPlugin {
+			public override string Name { get { return "Whitelist"; } }
+			public override string Description { get { return "Bypases the Age Verification subroutine for approved ageless/unparseable users."; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "whitelist"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.ChannelOps; } }
+			public override AccessPath AccessPath { get { return AccessPath.All; } }
+
+			public override void MessageLoopMethod(Message m) { return; }
+			public override void ShutdownMethod() { return; }
+			public override void SetupMethod() { return; }
+
+			public override IHost Host { get { return Core.pluginHost; } }
+
+			public override void PluginMethod(Message m) {
+				if (m.sourceChannel == null) { 
+					m.Reply("Error: No source channel attached to request. Unable to comply. Reporting error to support team..."); 
+					Core.ErrorLog.Log("No channel attached to whitelist request: " + m.Body); 
+					return;
+				}
+				if (m.args.Length < 1) { Core.ErrorLog.Log("Insufficient args for execution of .whitelist: " + m.Body);  m.Reply("No whitelist ID detected for authorization."); }
+				int TargetIndex = -1;
+				string TargetUser = null;
+				if (!int.TryParse(m.args[0], out TargetIndex)) { m.Reply("Unable to parse '" + m.args[0] + " as a valid whilelist target for channel '" + m.sourceChannel.Name + "'."); return; } 
+				else { TargetUser = m.sourceChannel.WhitelistQueue[TargetIndex]; }
+				if (TargetUser != null) {
+					if (!m.sourceChannel.WhitelistQueue.Contains(TargetUser)) { m.Reply("User '" + TargetUser + "' is not listed in the whitelist queue of channel '" + m.sourceChannel.Name + "'. Note that only unparseable or users with no listed age are considered for whitelisting."); }
+					else {
+						m.sourceChannel.Whitelist.Add(TargetUser);
+						m.sourceChannel.ChannelModLog.Log(string.Format("Adding user '{0}' to channel whitelist by order of '{1}' ({2})", TargetUser, m.sourceUser.Name, m.AccessLevel));
+						m.Reply("User '" + TargetUser + "' successfully added to whitelist for channel '" + m.sourceChannel.Name + "'.");
+						m.sourceChannel.WhitelistQueue.Remove(TargetUser);
+					}
+				}
+			}
 		}// plugin DEFAULT
 
 		sealed class DEFAULT : CogitoPlugin {
