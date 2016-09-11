@@ -347,7 +347,9 @@ namespace CogitoMini
 		internal static User OwnUser = null;
 		internal static FListProcessor Processor = new FListProcessor();
 		internal static Timer EternalSender;
-		//internal static Timer LaplacesDemon;
+		internal static Timer LaplacesDemon;
+		internal static DateTime LastPurge;
+		internal static ManualResetEvent _quitEvent = new ManualResetEvent(false);
 
 		internal static PluginHost pluginHost = new PluginHost();
 
@@ -359,6 +361,7 @@ namespace CogitoMini
         static void Main(){
 			nfi.NumberDecimalSeparator = ".";
 			AppDomain.CurrentDomain.ProcessExit += new EventHandler(OnProcessExit);
+			Console.CancelKeyPress += (sender, eArgs) => { _quitEvent.Set(); eArgs.Cancel = true; };
 			Console.WindowHeight = Console.LargestWindowHeight;
 			Console.WindowWidth = (Console.LargestWindowWidth / 2);
 
@@ -384,26 +387,34 @@ namespace CogitoMini
 			allGlobalUsers = DeserializeBinaryDatabase<User>(Config.AppSettings.UserDBFileName);
 			channels = DeserializeBinaryDatabase<Channel>(Config.AppSettings.ChannelDBFileName);
 			Ops.AddRange(Core.XMLConfig["botOps"].Split(';'));
+			
+			DateTime LastPurge = DateTime.Now;
 
 			EternalSender = new Timer(SendMessageFromQueue, _sendForever, Timeout.Infinite, (long)IO.Message.chat_flood + 1);
-			//LaplacesDemon = new Timer(ProcessCommandFromQueue, _sendForever, 0, 100);
+			LaplacesDemon = new Timer(ProcessCommandFromQueue, _sendForever, 0, 100);
 			
 			websocket = new WebSocket(string.Format("ws://{0}:{1}", XMLConfig["server"], XMLConfig["port"]));
 			websocket.MessageReceived += Core.OnWebsocketMessage;
 			websocket.Error += new EventHandler<SuperSocket.ClientEngine.ErrorEventArgs>(Core.OnWebsocketError);
 			Core.websocket.Open();
 			Account.login(XMLConfig["account"], XMLConfig["password"]);
-			DateTime LastPurge = DateTime.Now;
-			while (heartbeat) { 
-				ProcessCommandFromQueue();
-				if ((DateTime.Now - LastPurge) > Config.AppSettings.userProfileRefreshPeriod) { 
-					allGlobalUsers.Where(x => (x.hasData || x.Ignore) == false).Select(y => allGlobalUsers.Remove(y));
-					LastPurge = DateTime.Now;
-				}
-			} //infinite loop to keep websockets going
+
+			_quitEvent.WaitOne(); //keep websockets open and blocks thread until tripped
+
+			Core.SystemLog.Log("Saving channel and user data to hard drive...");
+			if (websocket.State == WebSocket4Net.WebSocketState.Open) { Core.websocket.Close(); }
+			while (IncomingMessageQueue.Count > 0) { try { ProcessCommandFromQueue(new object()); } catch (Exception e) { ErrorLog.Log("Exception in command processing during shutdown: " + e.Message); } }
+			SaveAllSettingsBinary();
+			foreach (Channel c in joinedChannels) { c.Dispose(); }
+			foreach (Logging.LogFile l in ActiveUserLogs) { l.Dispose(); } //flushes and writes all extant user logs.
+			SystemLog.Log("Shutting down.");
 		}
 
-		internal static void ProcessCommandFromQueue() {
+		internal static void ProcessCommandFromQueue(object stateobject) {
+			if ((DateTime.Now - LastPurge) > Config.AppSettings.userProfileRefreshPeriod) {
+				allGlobalUsers.Where(x => (x.hasData || x.Ignore) == false).Select(y => allGlobalUsers.Remove(y));
+				LastPurge = DateTime.Now;
+			}
 			if (IncomingMessageQueue.Count > 0) {
 				SystemCommand C = IncomingMessageQueue.Dequeue();
 				try { Processor.GetType().GetMethod(C.OpCode, BindingFlags.NonPublic | BindingFlags.Static).Invoke(C, new object[] { C }); }

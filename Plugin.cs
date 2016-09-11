@@ -94,7 +94,6 @@ namespace CogitoMini {
 			AddInternalPlugin<Remote>();
 			AddInternalPlugin<Admin>();
 			AddInternalPlugin<ListChannels>();
-
 		}
 
 		private static void AddInternalPlugin<T>() where T: CogitoPlugin, new() {
@@ -123,17 +122,7 @@ namespace CogitoMini {
 
 			public override IHost Host { get { return Core.pluginHost; } }
 
-			public override void PluginMethod(Message m) {
-				//Core.OnProcessExit(new object(), new EventArgs());	//orderly shutdown procedure
-				Core.SystemLog.Log("Saving channel and user data to hard drive...");
-				if (Core.websocket.State == WebSocket4Net.WebSocketState.Open) { Core.websocket.Close(); }
-				while (Core.IncomingMessageQueue.Count > 0) { try { Core.ProcessCommandFromQueue(); } catch (Exception e) { Core.ErrorLog.Log("Exception in command processing during shutdown: " + e.Message); } }
-				Core.SaveAllSettingsBinary();
-				foreach (Channel c in Core.joinedChannels) { c.Dispose(); }
-				foreach (Logging.LogFile l in Core.ActiveUserLogs) { l.Dispose(); } //flushes and writes all extant user logs.
-				Core.SystemLog.Log("Shutting down.");
-				Environment.Exit(0);                                //exit with code 0 - all clear
-			}
+			public override void PluginMethod(Message m) { Core._quitEvent.Set(); }
 		}//plugin Shutdown
 
 		sealed class Minage : CogitoPlugin {
