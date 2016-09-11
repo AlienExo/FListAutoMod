@@ -294,8 +294,8 @@ namespace CogitoMini.Utils
 
 	public static class RegularExpressions{
 		internal static Regex ProfileHTMLTags = new Regex(@"<span class=.*>(.*):</span>(.*)");
-		internal static Regex AgeSearch = new Regex(@"\d{1,9}");
-		internal static Regex Numbers = new Regex(@"\d{1,5}[.,]?\d{0,2}");
+		internal static Regex AgeSearch = new Regex(@"(\d{1,9})");
+		internal static Regex Numbers = new Regex(@"(\d{1,5}[.,]?\d{0,2})");
 		internal static Regex Dates = new Regex("(?<day>\\d{1,2})(\\s)*(/|.|(st|nd|rd|th))?(\\s)*(?<month>(\\d{1,2}|\\w{3,9}))");
 	}
 

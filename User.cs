@@ -38,6 +38,7 @@ namespace CogitoMini {
 
 		/// <summary> xXxSEPHIROTHxXx </summary>
 		public readonly string Name = null;
+		public readonly string _Name = null;
 
 		/// <summary> 2 shota 4 u </summary>
 		public int Age {
@@ -90,7 +91,8 @@ namespace CogitoMini {
 
 		public User(string nName) {
 			Name = nName.Trim('\t', '\r', '\n', ' ');
-			this.Age = -1;
+			_Name = nName.ToLowerInvariant();
+			Age = -1;
 			Core.allGlobalUsers.Add(this);
 		}
 
@@ -112,26 +114,48 @@ namespace CogitoMini {
 			m.Send();
 		}
 
-		public override int GetHashCode() { return Name.GetHashCode(); }
+		public override int GetHashCode() { return _Name.GetHashCode(); }
 
 		public bool Equals(User user) {
-			if (Name == user.Name) { return true; }
+			if (_Name == user._Name) { return true; }
 			else { return false; }
 		}
 
 		public int CompareTo(object obj) {
 			if (obj == null) { return 1; }
 			User o = obj as User;
-			if (o != null) { return Name.CompareTo(o.Name); }
+			if (o != null) { return _Name.CompareTo(o._Name); }
 			else { throw new ArgumentException("Object cannot be made into User. Cannot CompareTo()."); }
 		}
 
 		internal void Kick(Channel c) {
-			if (!Core.OwnUser.IsChannelOp(c)) {
+			if (Core.OwnUser.IsChannelOp(c)) {
 				IO.SystemCommand s = new IO.SystemCommand();
 				s.OpCode = "CKU";
-				s.Data["character"] = this.Name;
+				s.Data["character"] = Name;
 				s.Data["channel"] = c.Key;
+				s.Send();
+			}
+		}
+
+		internal void Ban(Channel c) {
+			if (Core.OwnUser.IsChannelOp(c)) {
+				IO.SystemCommand s = new IO.SystemCommand();
+				s.OpCode = "CBU";
+				s.Data["character"] = Name;
+				s.Data["channel"] = c.Key;
+				s.Send();
+			}
+		}
+
+
+		internal void Timeout(Channel c, int duration) {
+			if (Core.OwnUser.IsChannelOp(c)) {
+				IO.SystemCommand s = new IO.SystemCommand();
+				s.OpCode = "CTU";
+				s.Data["character"] = Name;
+				s.Data["channel"] = c.Key;
+				s.Data["length"] = duration;
 				s.Send();
 			}
 		}
@@ -159,7 +183,7 @@ namespace CogitoMini {
 			FormData.Add("name", WebUtility.HtmlEncode(Name));
 			if ((DateTime.Now - Account.LoginKey.ticketTaken) >= Config.AppSettings.ticketLifetime) { Account.getTicket(); }
 			FormData.Add("ticket", WebUtility.HtmlEncode(Account.LoginKey.ticket));
-			FormData.Add("account", WebUtility.HtmlEncode(System.Configuration.ConfigurationManager.AppSettings.Get("account")));
+			FormData.Add("account", WebUtility.HtmlEncode(Core.XMLConfig["account"]));
 			if (useAPIv2) { FormData.Add("infotags", "1"); }
 			WebHeaderCollection FormHeaders = new WebHeaderCollection();
 			FormHeaders.Add(HttpRequestHeader.ContentType, "application/x-www-form-urlencoded");
@@ -183,7 +207,8 @@ namespace CogitoMini {
 				foreach (Match profileitem in dataTags) { if (profileitem.Groups["key"].Success && profileitem.Groups["value"].Success) { ProfileData.Add(profileitem.Groups["key"].Value, profileitem.Groups["value"].Value); } }
 			}
 			w.Dispose();
-			lock (UserLock) {
+
+			//lock (UserLock) {
 				Age = 0;
 				if (useAPIv2) { //nice, direct parsing that isn't online yet because fuck you
 					FListAPI.Infotags CharInfo = ((FListAPI.CharacterDataAPIv2)DataDigest).infotags;
@@ -209,7 +234,8 @@ namespace CogitoMini {
 					}
 				}
 				dataTakenOn = DateTime.Now; //sets the flag
-			}
+				hasData = true;
+			//}
 		}
 
 		internal void MessageReceived(IO.Message m) {
@@ -218,42 +244,6 @@ namespace CogitoMini {
 				Core.ActiveUserLogs.Add(userLog);
 			}
 			userLog.Log(m);
-		}
-
-		internal async void CheckAge(Channel c) {
-			if (c.Whitelist.Contains(Name)) { return; }
-			if ((DateTime.Now - dataTakenOn) >= Config.AppSettings.userProfileRefreshPeriod) { await GetBasicProfileInfo(); }
-			//await GetBasicProfileInfo();
-			//Console.WriteLine(string.Format("User {0} has entered channel {1}. User age is {2}, channel minage is {3}", Name, c.Name, Age, c.minAge));
-			if (Age <= 0 && c.underageResponse != UnderageReponse.Ignore) {
-				int QueuePosition = c.WhitelistQueue.Contains(Name) ? c.WhitelistQueue.IndexOf(Name) : c.WhitelistQueue.Count;
-				int ChannelInteger = Core.joinedChannels.Contains(c) ? Core.joinedChannels.IndexOf(c) : -1;
-				if (ChannelInteger == -1) { throw new InvalidOperationException("Target Channel " + c.Name + " is not registered in Core.joinedChannels and should not be being monitored..."); }
-				c.TryAlertMod(Name, string.Format("Cannot parse age of User '{0}' joining channel '{1}' (minimum age set to {2}). Please verify.\n In case of false positive, please respond with '.whitelist {3} => {4}'. [BETA]", Name, c.Name, c.minAge, QueuePosition, ChannelInteger));
-				if (Age == -1) { Core.ErrorLog.Log("Age check failed for user " + Name + "; check subroutine."); return; }
-				return;
-			}
-			if (Age < c.minAge) {
-				switch (c.underageResponse) {
-					default:
-					case UnderageReponse.Alert:
-						c.TryAlertMod(Name, string.Format("[b]Warning![/b] User '{0}' is below minimum age ({1}) for channel '{2}'. Auto-Kick is disabled. Please proceed manually.", Name, c.minAge, c.Name));
-						break;
-
-					case UnderageReponse.Ignore:
-						break;
-
-					case UnderageReponse.Kick:
-						Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}' and will be removed. You are welcome to join with an of-age character. Have a nice day.", Name, c.minAge, c.Name));
-						c.Kick(this);
-						break;
-
-					case UnderageReponse.Warn:
-						c.Message(string.Format("This is an automated message. User '{0}' is below the minimum age ({1}) for channel '{2}'. Please leave or return with an of-age character.", Name, c.minAge, c.Name));
-						//c.TryAlertMod(Name, string.Format("[b]Warning![/b] User '{0}' is below minimum age ({1}) for channel '{2}'. User has been warned.", Name, c.minAge, c.Name));
-						break;
-				}
-			}
 		}
 
 		public virtual void Dispose() {

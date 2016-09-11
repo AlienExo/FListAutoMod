@@ -43,15 +43,12 @@ namespace CogitoMini {
 		internal int joinIndex = -1;
 		[NonSerialized]
 		internal Queue<Incident> modMessageQueue = new Queue<Incident>();
-		[NonSerialized]
-		internal List<string> WhitelistQueue = new List<string>();
 
 		[OnDeserialized]
 		private void SetValuesOnDeserialized(StreamingContext context) {
 			Mods = new HashSet<User>();
 			Users = new HashSet<User>();
 			modMessageQueue = new Queue<Incident>();
-			WhitelistQueue = new List<string>();
 		}
 
 		internal HashSet<string> Whitelist = new HashSet<string>();
@@ -186,6 +183,7 @@ namespace CogitoMini {
 		public void Log(string s, bool suppressPrint) { ChannelLog.Log(s, suppressPrint); }
 
 		public void Kick(User u) { u.Kick(this); }
+		public void Ban(User u) { u.Ban(this); }
 
 		public void TryAlertMod(string subject, string message) {
 			List<User> modsToAlert = Mods.Where(n => (n.Ignore == false && (int)n.Status < 4)).Intersect(Users).ToList();
@@ -195,13 +193,50 @@ namespace CogitoMini {
 				//Core.ModLog.Log("Could not find any mods to alert for incident '" + message + "'", true);
 				modMessageQueue.Enqueue(new Incident(subject, DateTime.Now, message));
 			}
-			else { Utils.Math.RandomChoice(modsToAlert).Message(string.Format("This is an automated message.\n\t Subject: {0}\nChannel: {1}\n{2}", subject, Name, message)); }
+			else {Utils.Math.RandomChoice(modsToAlert).Message(string.Format("This is an automated message.\n\t Subject: {0}\nChannel: {1}\n{2}", subject, Name, message)); }
 		}
 
 		public void Message(string message) {
 			IO.Message m = new IO.Message();
 			m.sourceChannel = this;
-			m.Reply(message, false);
+			m.Reply(message, IO.ReplyMode.ForceChannel);
+		}
+
+		internal async void CheckAge(string Username) {
+			if (Whitelist.Contains(Username)) { return; }
+			User u = new User(Username);
+			await u.GetBasicProfileInfo();
+			//await GetBasicProfileInfo();
+			//Console.WriteLine(string.Format("User {0} has entered channel {1}. User age is {2}, channel minage is {3}", Name, c.Name, Age, c.minAge));
+			if (u.Age <= 0 && underageResponse != UnderageReponse.Ignore) {
+				int ChannelInteger = Core.joinedChannels.Contains(this) ? Core.joinedChannels.IndexOf(this) : -1;
+				if (ChannelInteger == -1) { Core.ErrorLog.Log("Target Channel " + Name + " is not registered in Core.joinedChannels and should not be being monitored..."); return; }
+				TryAlertMod(Name, string.Format("Cannot parse age of User '{0}' joining channel '{1}' (minimum age set to {2}). Please verify.\n\tIn case of false positive, please respond with '.whitelist {3} {4} {5}'. Copy and paste the command from this message to avoid misspelling.", u.Name, Name, minAge, Name, Config.AppSettings.RedirectOperator, ChannelInteger));
+				if (u.Age == -1) { Core.ErrorLog.Log("Age check failed for user " + u.Name + "; check subroutine."); return; }
+				return;
+			}
+			if (u.Age < minAge) {
+				switch (underageResponse) {
+					default:
+					case UnderageReponse.Alert:
+						TryAlertMod(Name, string.Format("[b]Warning![/b] User '{0}' is below minimum age ({1}) for channel '{2}'. Auto-Kick is disabled. Please proceed manually.", u.Name, minAge, Name));
+						break;
+
+					case UnderageReponse.Ignore:
+						break;
+
+					case UnderageReponse.Kick:
+						Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}' and will be removed. You are welcome to join with an of-age character. Have a nice day.", u.Name, minAge, Name));
+						Kick(u);
+						break;
+
+					case UnderageReponse.Warn:
+						Message(string.Format("This is an automated message. User '{0}' is below the minimum age ({1}) for channel '{2}'. Please leave or return with an of-age character.", u.Name, minAge, Name));
+						//c.TryAlertMod(Name, string.Format("[b]Warning![/b] User '{0}' is below minimum age ({1}) for channel '{2}'. User has been warned.", Name, c.minAge, c.Name));
+						break;
+				}
+			}
+			u.Dispose();
 		}
 	}
 }

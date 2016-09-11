@@ -129,7 +129,7 @@ namespace CogitoMini
 			using (FileStream fs = File.Open(Config.AppSettings.LoggingPath + "Connections.log", FileMode.Append)) {
 				StreamWriter fsw = new StreamWriter(fs);
 				DateTime Now = DateTime.Now;
-				fsw.Write(String.Format("{0}\t{1}\t{2}\t{3}\t{4}\tusers connected\r\n", Now.ToString("yyyy-MM-dd"), Now.ToString("HH:mm:ss"), System.Configuration.ConfigurationManager.AppSettings.Get("server"), System.Configuration.ConfigurationManager.AppSettings.Get("port"), C.Data["count"].ToString()));
+				fsw.Write(String.Format("{0}\t{1}\t{2}\t{3}\t{4}\tusers connected\r\n", Now.ToString("yyyy-MM-dd"), Now.ToString("HH:mm:ss"), Core.XMLConfig["server"], Core.XMLConfig["port"], C.Data["count"].ToString()));
 				fsw.Flush();
 			}
 		}
@@ -195,7 +195,7 @@ namespace CogitoMini
 				if (c.Mods.Contains(C.sourceUser)) { c.ChannelModLog.Log(byeString, true); }
 				c.Log(byeString);
 			}
-			
+			Core.allGlobalUsers.Remove(C.sourceUser);	
 		}
 
 		/// <summary> Initial friends list.
@@ -205,7 +205,7 @@ namespace CogitoMini
 		/// <summary> Server hello command. Tells which server version is running and who wrote it.
 		/// Received: HLO { "message": string }</summary>
 		internal static void HLO(SystemCommand C) {
-			Core.OwnUser = Core.getUser(System.Configuration.ConfigurationManager.AppSettings.Get("character"));
+			Core.OwnUser = Core.getUser(Core.XMLConfig["character"]);
 			new IO.SystemCommand("CHA").Send();
 		}
 
@@ -214,7 +214,7 @@ namespace CogitoMini
 		/// ICH {"users": [{"identity": "Shadlor"}], "channel": "Frontpage", mode: "chat"}</summary>
 		internal static void ICH(SystemCommand C) {
 			IList<string> Users = ((JArray)C.Data["users"]).ToObject<List<Dictionary<string, string>>>().Select(n => n.Values.ToArray()[0]).ToList(); //List<Dictionary<string, string>> //TODO custom JSON fix...
-			foreach (string u in Users) { C.sourceChannel.Users.Add(Core.getUser(u)); }
+			foreach (string u in Users) { C.sourceChannel.Users.Add(new User(u)); }
 		}
 
 		internal static void IDN(SystemCommand C) { }
@@ -230,15 +230,15 @@ namespace CogitoMini
 		///	Send  As: JCH { "channel": string } </summary>
 		internal static void JCH(SystemCommand C) {
 			JObject JoinData = (JObject)C.Data["character"];
-			User us = Core.getUser(JoinData["identity"].ToString());
-			C.sourceChannel.Users.Add(us);
-			C.sourceChannel.Log(string.Format("User '{0}' joined Channel '{1}'", us.Name, C.sourceChannel.Name));
-			if (us == Core.OwnUser) {
+			string us = JoinData["identity"].ToString();
+            C.sourceChannel.Users.Add(new User(us));
+			C.sourceChannel.Log(string.Format("User '{0}' joined Channel '{1}'", us, C.sourceChannel.Name));
+			if (us == Core.OwnUser.Name) {
 				Core.joinedChannels.Add(C.sourceChannel);
 				C.sourceChannel.joinIndex = Core.joinedChannels.IndexOf(C.sourceChannel);
 				return;
 			}
-			if (C.sourceChannel.minAge != 0) { C.sourceUser.CheckAge(C.sourceChannel); }
+			if (C.sourceChannel.minAge != 0) { C.sourceChannel.CheckAge(C.sourceUser.Name); }
 			if (C.sourceChannel.Mods.Contains(C.sourceUser)) { ProcessModMessageQueue(C.sourceUser); }
 		}
 
@@ -260,10 +260,10 @@ namespace CogitoMini
 		/// Send  As: LCH { "channel": string }</summary>
 		internal static void LCH(SystemCommand C) {
 			//Channel ch = Core.getChannel(C.Data["channel"].ToString()); //"title" would be the channel's name, which in case of private channels can collide!
-			User us = Core.getUser(C.Data["character"].ToString());
-			C.sourceChannel.Log(string.Format("User '{0}' left Channel '{1}'", us.Name, C.sourceChannel.Name));
-			C.sourceChannel.Users.Remove(us);
-			if (us.Name == Core.OwnUser.Name) { 
+			string us = C.Data["character"].ToString();
+			C.sourceChannel.Log(string.Format("User '{0}' left Channel '{1}'", us, C.sourceChannel.Name));
+			C.sourceChannel.Users.Remove(Core.getUser(us));
+			if (us == Core.OwnUser.Name) { 
 				Core.joinedChannels.Remove(C.sourceChannel);
 				C.sourceChannel.joinIndex = -1;	
 			}
@@ -331,7 +331,7 @@ namespace CogitoMini
 				catch (Exception ex) { Core.ErrorLog.Log(String.Format("Private Channel parsing failed:\n\t{0}\n\t{1}\n\t{2}", ex.Message, ex.InnerException, ex.StackTrace)); }
 			}
 			new IO.SystemCommand("STA { \"status\": \"online\", \"statusmsg\": \"Running CogitoMini v" + Config.AppSettings.Version + "\" }").Send();
-			foreach (string cn in System.Configuration.ConfigurationManager.AppSettings.Get("autoJoin").Split(';')) { if (Core.channels.Count(x => x.Name == cn) > 0) { Core.channels.First(y => y.Name == cn).Join(); } }
+			foreach (string cn in Core.XMLConfig["autoJoin"].Split(';')) { if (Core.channels.Count(x => x.Name == cn) > 0) { Core.channels.First(y => y.Name == cn).Join(); } }
 		}
 
 		/// <summary> Profile data commands sent in response to a PRO client command. 
@@ -451,30 +451,37 @@ namespace CogitoMini
 		}
 		
 		internal static void ProcessPossibleCommand(Message m) {
+			AccessPath accesspath = new AccessPath();
 			string TargetMethod = m.args[0];
 			m.args = m.args.Skip(1).ToArray();
+			
+			if (m.sourceChannel != null) {
+				if (m.sourceChannel.Mods.Contains(m.sourceUser)) { m.AccessLevel++; }
+				accesspath = AccessPath.ChannelOnly;
+			}
+			else { accesspath = AccessPath.PMOnly; }
+
 			if (TargetMethod.StartsWith(Config.AppSettings.TriggerPrefix) && Config.AITriggers.ContainsKey(TargetMethod)) {
-				Core.SystemLog.Log("Attempting execution of bot method " + TargetMethod + "...");
 				if (m.args.Length >= 2) {
 					int chanIndex = -1;
-					if (m.args[m.args.Length - 1] == "<=" && int.TryParse(m.args[m.args.Length], out chanIndex)) {
+					if (m.args[m.args.Length - 2] == Config.AppSettings.RedirectOperator && int.TryParse(m.args[m.args.Length - 1], out chanIndex)) {
 						if (chanIndex <= Core.joinedChannels.Count) { m.sourceChannel = Core.joinedChannels[chanIndex]; }
 						m.args = m.args.Take(m.args.Length - 2).ToArray();
 					}
 				}
-				if (m.sourceChannel != null) { if (m.sourceChannel.Mods.Contains(m.sourceUser)) { m.AccessLevel++; } }
 				if (Core.globalOps.Contains(m.sourceUser)) { m.AccessLevel = AccessLevel.GlobalOps; }
-				if (Core.Ops.Contains(m.sourceUser.Name)) { m.AccessLevel = AccessLevel.RootOnly; }
+				if (Core.Ops.Select(n => n.ToLowerInvariant()).Contains(m.sourceUser._Name)) { m.AccessLevel = AccessLevel.RootOnly; }
+				
 				try {
 					CogitoPlugin AIMethod = Config.AITriggers[TargetMethod];
-					if (m.AccessLevel >= AIMethod.AccessLevel) {
+					if (m.AccessLevel >= AIMethod.AccessLevel && accesspath >= AIMethod.AccessPath) {
 						if (m.AccessLevel >= AccessLevel.ChannelOps) {
-							if (m.sourceChannel != null) { m.sourceChannel.ChannelModLog.Log(string.Format("Executing command {0} by order of {1}, channel {2} -{3}", TargetMethod, m.sourceUser.Name, m.sourceChannel.Name, m.Body)); }
-							else { Core.ModLog.Log(string.Format("Executing command through PM from {0}, args '{1}'", m.sourceUser.Name, m.Body)); }
+							if (m.sourceChannel != null) { m.sourceChannel.ChannelModLog.Log(string.Format("Executing command {0} by order of {1} [{2}], channel {3}. Args: {4}", TargetMethod, m.sourceUser.Name, m.AccessLevel, m.sourceChannel.Name, m.Body)); }
+							else { Core.ModLog.Log(string.Format("Executing command {0} by order of {1} [{2}], via PM. Args: '{3}'",  TargetMethod, m.sourceUser.Name, m.AccessLevel, m.Body)); }
 						}
 						AIMethod.PluginMethod(m); 
 					}
-					else { m.Reply(string.Format("You do not have the neccessary access permissions to execute {0} in channel {1}.", m.args[0], m.sourceChannel.Name)); }
+					else { m.Reply(string.Format("You do not have the neccessary access permissions to execute {0} in channel {1}.", TargetMethod, m.sourceChannel.Name)); }
 				}
 				catch (KeyNotFoundException NoMethod) { Core.ErrorLog.Log(string.Format("Invocation of Bot Method {0} failed, as the method is not registered in the AITriggers.Triggers dictionary or does not exist:\n\t{1}\n\t{2}", m.OpCode, NoMethod.Message, NoMethod.InnerException)); }
 				catch (TargetException NoMethod) { Core.ErrorLog.Log(string.Format("Invocation of Bot Method {0} failed, as the method does not exist:\n\t{1}\n\t{2}", m.OpCode, NoMethod.Message, NoMethod.InnerException)); }
@@ -497,7 +504,7 @@ namespace CogitoMini
 			string FullMessage = "This is an automated message.\nWelcome back. In your absence, there have been {0} incidents requiring moderator attention, of which {1} have expired (user has left channel).";
 			int totalIncidents = 0, expiredIncidents = 0;
 			foreach (KeyValuePair<Channel, List<Incident>> Item in data) {
-				IEnumerable<Incident> current = Item.Value.Where(n => Item.Key.Users.Select(o => o.Name).Contains(n.Subject));
+				IEnumerable<Incident> current = Item.Value.Where(n => Item.Key.Users.Select(x => x.Name).Contains(n.Subject));
 				IEnumerable<Incident> expired = Item.Value.Where(n => !current.Contains(n));
 				int expiredChanCount = expired.Count();
 				int currentChanCount = current.Count();

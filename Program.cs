@@ -21,7 +21,7 @@ using CogitoMini.IO;
 
 #region changelog
 /* Changelog
- *
+ * >Insert whitelist
  *
  *
  *
@@ -120,8 +120,8 @@ namespace CogitoMini
 		protected internal static void getTicket() {
             using (var wb = new WebClient()) {
 				var data = new NameValueCollection();
-				data["account"] = ConfigurationManager.AppSettings.Get("account");
-				data["password"] = ConfigurationManager.AppSettings.Get("password");
+				data["account"] = Core.XMLConfig["account"];
+				data["password"] = Core.XMLConfig["password"];
 				data["no_characters"] = "true";
 				data["no_friends"] = "true";
 				data["no_bookmarks"] = "true";
@@ -147,13 +147,13 @@ namespace CogitoMini
 				var logindata = new Dictionary<string, string>();
 				logindata["method"] = "ticket";
 				logindata["account"] = _account;
-				logindata["character"] = ConfigurationManager.AppSettings.Get("character");
+				logindata["character"] = Core.XMLConfig["character"];
 				logindata["ticket"] = Account.LoginKey.ticket;
 				logindata["cname"] = "COGITO";
 				logindata["cversion"] = Config.AppSettings.Version;
 				string openString = JsonConvert.SerializeObject(logindata);
 				openString = "IDN " + openString;
-				Core.SystemLog.Log("Logging in with character '" + ConfigurationManager.AppSettings.Get("character") + "'.");
+				Core.SystemLog.Log("Logging in with character '" + Core.XMLConfig["character"] + "'.");
 				Core.websocket.Send(openString);
 			}
 		}
@@ -308,7 +308,7 @@ namespace CogitoMini
 	internal class PluginHost : IHost {
 		HashSet<User> IHost.GetChannelModList(Channel c) { return c.Mods; }
 		HashSet<User> IHost.GetChannelUserList(Channel c) { return c.Users;  }
-		ConcurrentSet<User> IHost.GetGlobalUserList() { return Core.allGlobalUsers;  }
+		//ConcurrentSet<User> IHost.GetGlobalUserList() { return Core.allGlobalUsers;  }
 		void IHost.LogToErrorFile(string s) { Core.ErrorLog.Log(s);  }
 		void IHost.LogToSystemFile(string s) { Core.SystemLog.Log(s); }
 	}
@@ -352,6 +352,7 @@ namespace CogitoMini
 		internal static PluginHost pluginHost = new PluginHost();
 
 		internal static System.Globalization.NumberFormatInfo nfi = new System.Globalization.NumberFormatInfo();
+		internal static Dictionary<string, string> XMLConfig = new Dictionary<string, string>();
 
 		/// <summary>The main entry point for the application.</summary>
 		[STAThread]
@@ -361,7 +362,18 @@ namespace CogitoMini
 			Console.WindowHeight = Console.LargestWindowHeight;
 			Console.WindowWidth = (Console.LargestWindowWidth / 2);
 
-            SystemLog.Log("Start up: CogitoMini v." + Config.AppSettings.Version);
+			if (!File.Exists(Config.AppSettings.DataPath + "App.config")) { 
+				ErrorLog.Log("No App.config file in directory /data/! Cannot retrieve server and user settings. Shutting down...");
+				Console.ReadKey();
+				Environment.Exit(1);
+			}
+
+			ExeConfigurationFileMap configMap = new ExeConfigurationFileMap();
+			configMap.ExeConfigFilename = Config.AppSettings.DataPath + "App.config";
+			Configuration _XMLConfig = ConfigurationManager.OpenMappedExeConfiguration(configMap, ConfigurationUserLevel.None);
+			foreach (KeyValueConfigurationElement ce in _XMLConfig.AppSettings.Settings) { XMLConfig.Add(ce.Key, ce.Value); }
+
+			SystemLog.Log("Start up: CogitoMini v." + Config.AppSettings.Version);
 			SystemLog.Log("Loading Plugins...");
 			try{ Plugins.loadPlugins(); }
 			catch (Exception e) { 
@@ -371,18 +383,24 @@ namespace CogitoMini
 			}
 			allGlobalUsers = DeserializeBinaryDatabase<User>(Config.AppSettings.UserDBFileName);
 			channels = DeserializeBinaryDatabase<Channel>(Config.AppSettings.ChannelDBFileName);
-			Ops.AddRange(ConfigurationManager.AppSettings.Get("botOps").Split(';'));
+			Ops.AddRange(Core.XMLConfig["botOps"].Split(';'));
 
-			EternalSender = new Timer(SendMessageFromQueue, _sendForever, Timeout.Infinite, (long)Message.chat_flood + 1);
+			EternalSender = new Timer(SendMessageFromQueue, _sendForever, Timeout.Infinite, (long)IO.Message.chat_flood + 1);
 			//LaplacesDemon = new Timer(ProcessCommandFromQueue, _sendForever, 0, 100);
 			
-			websocket = new WebSocket(string.Format("ws://{0}:{1}", ConfigurationManager.AppSettings.Get("server"), ConfigurationManager.AppSettings.Get("port")));
+			websocket = new WebSocket(string.Format("ws://{0}:{1}", XMLConfig["server"], XMLConfig["port"]));
 			websocket.MessageReceived += Core.OnWebsocketMessage;
 			websocket.Error += new EventHandler<SuperSocket.ClientEngine.ErrorEventArgs>(Core.OnWebsocketError);
 			Core.websocket.Open();
-			Account.login(ConfigurationManager.AppSettings.Get("account"), ConfigurationManager.AppSettings.Get("password"));
-
-			while (heartbeat) { ProcessCommandFromQueue(); } //infinite loop to keep websockets going
+			Account.login(XMLConfig["account"], XMLConfig["password"]);
+			DateTime LastPurge = DateTime.Now;
+			while (heartbeat) { 
+				ProcessCommandFromQueue();
+				if ((DateTime.Now - LastPurge) > Config.AppSettings.userProfileRefreshPeriod) { 
+					allGlobalUsers.Where(x => (x.hasData || x.Ignore) == false).Select(y => allGlobalUsers.Remove(y));
+					LastPurge = DateTime.Now;
+				}
+			} //infinite loop to keep websockets going
 		}
 
 		internal static void ProcessCommandFromQueue() {
@@ -392,38 +410,6 @@ namespace CogitoMini
 				catch (Exception FuckUp) { ErrorLog.Log(string.Format("Invocation of Method {0} failed:\n\t{1}\n\t{2}\t{3}", C.OpCode, FuckUp.Message, FuckUp.InnerException, C.Data)); }
 			}
 		}
-
-	   /*
-		* /// <summary>
-		* /// Function to Deserialize a ConcurrentSet T instance from BinarySerializer-produced files.
-		* /// </summary>
-		* /// <typeparam name="T">The inner type for the ConcurrentSet to deserialize, e.g. ConcurrentSet User</typeparam>
-		* /// <param name="DataBaseFileName">The name of the BinaryFormatted database file to be deserialized. Expects a ConcurrentSet<T></T>.</param>
-		* /// <param name="ContainingFolder">Leave optional (null) to load from Config.AppSettings.DataPath (/data/); else, supply full path to containing folder</param>
-		* /// <exception cref="System.ArgumentException">Thrown when the TargetObject's type and the data inside the file do not match.</exception>
-		* private static ConcurrentSet<T> DeserializeXMLDatabase<T>(string DataBaseFileName, string ContainingFolder = null, string Extension = ".xml") {
-		* 	SystemLog.Log("Loading " + typeof(T).Name + " Database...");
-		* 	ConcurrentSet<T> DeserializationProxy = new ConcurrentSet<T>();
-		* 	try {
-		* 		ContainingFolder = ContainingFolder ?? Config.AppSettings.DataPath;
-		* 		Stream s = File.OpenRead(Path.Combine(ContainingFolder, DataBaseFileName + Extension));
-		* 		XmlSerializer xmlDeserialiser = new XmlSerializer(typeof(ConcurrentSet<T>));
-		* 		try { DeserializationProxy = (ConcurrentSet<T>)xmlDeserialiser.Deserialize(s); }
-		* 		catch (System.Runtime.Serialization.SerializationException ex) { Core.ErrorLog.Log(String.Format("Could not deserialize database: {0} {1}", ex.Message, ex.StackTrace)); }
-		* 		catch (Exception e) { Core.ErrorLog.Log(String.Format("Error whilst deserializing database: {0} {1}", e.Message, e.StackTrace)); }
-		* 		s.Close();
-		* 		SystemLog.Log("Deserialized " + typeof(T).Name + " Database and loaded " + DeserializationProxy.Count() + " entries.");
-		* 	}
-		* 	catch (FileNotFoundException) { } //Do Nothing ¯\_(ツ)_/¯
-		* 	catch (DirectoryNotFoundException) { Directory.CreateDirectory(Config.AppSettings.DataPath); }
-		* 	catch (UnauthorizedAccessException) {
-		* 		SystemLog.Log("Incapable of accessing user database directory");
-		* 		Console.WriteLine("Warning: Application is unable to access its user database in " + Config.AppSettings.DataPath +
-		* 		"'. Please ensure all proper permissions exist. Application may be unable to persist user database, leading to increased bandwith usage.", "Unable to load user database");
-		* 	}
-		* 	return DeserializationProxy;
-		* }
-		*/
 
 		/// <summary>
 		/// Function to Deserialize a ConcurrentSet T instance from BinarySerializer-produced files.
@@ -485,16 +471,16 @@ namespace CogitoMini
 		internal static void SaveAllSettingsBinary(string ContainingFolder = null, string Extension = ".dat") {
 			ContainingFolder = ContainingFolder ?? Config.AppSettings.DataPath;
 			BinaryFormatter bf = new BinaryFormatter();
-			try {
-				using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.UserDBFileName + Extension))) {
-					bf.Serialize(fs, allGlobalUsers);
-					fs.Flush();
-				}
-			}
-			catch (Exception e) {
-				SystemLog.Log("WARNING: Failed to save binary user data to drive: " + e.Message);
-				ErrorLog.Log("WARNING: Failed to save user binary data to drive: " + e.Message);
-			}
+			//try {
+			//	using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.UserDBFileName + Extension))) {
+			//		bf.Serialize(fs, allGlobalUsers);
+			//		fs.Flush();
+			//	}
+			//}
+			//catch (Exception e) {
+			//	SystemLog.Log("WARNING: Failed to save binary user data to drive: " + e.Message);
+			//	ErrorLog.Log("WARNING: Failed to save user binary data to drive: " + e.Message);
+			//}
 
 			try {
 				using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.ChannelDBFileName + Extension))) {
@@ -536,7 +522,7 @@ namespace CogitoMini
 		/// <param name="username">Username (string) to look for</param>
 		/// <returns>User instance</returns>
 		public static User getUser(string username){
-			return allGlobalUsers.Count(x => x.Name == username) > 0 ? allGlobalUsers.First<User>(n => n.Name == username) : new User(username);
+			return allGlobalUsers.Count(x => x._Name == username.ToLowerInvariant()) > 0 ? allGlobalUsers.First(n => n._Name == username.ToLowerInvariant()) : new User(username);
 		}
 		
 		///// <summary> Overloaded in order to immediately return User instances, as may happen...?
@@ -563,6 +549,14 @@ namespace CogitoMini
 				return c;
 			}
 			//return Core.channels.Count(x => x.Key == channel) > 0 ? Core.channels.First<Channel>(n => n.Key == channel) : new Channel(channel);
+		}
+
+		internal static void Message(string targetUser, string MessageBody, string Channel = "PM") {
+			IO.Message m = new IO.Message();
+			m.OpCode = Channel == "PM" ? "PRI" : "MSG";
+			if (Channel != "PM") { m.Data["channel"] = Channel; }
+			m.Data["recipient"] = targetUser;
+			m.Body = MessageBody;
 		}
 	}
 }

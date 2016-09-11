@@ -14,7 +14,7 @@ namespace CogitoMini {
 	internal interface IHost {
 		void LogToErrorFile(string s);
 		void LogToSystemFile(string s);
-		ConcurrentSet<User> GetGlobalUserList();
+		//ConcurrentSet<User> GetGlobalUserList();
 		HashSet<User> GetChannelUserList(Channel c);
 		HashSet<User> GetChannelModList(Channel c);
 	}
@@ -92,6 +92,8 @@ namespace CogitoMini {
 			AddInternalPlugin<Horoscopes>();
 			AddInternalPlugin<Whitelist>();
 			AddInternalPlugin<Remote>();
+			AddInternalPlugin<Admin>();
+			AddInternalPlugin<ListChannels>();
 
 		}
 
@@ -130,8 +132,6 @@ namespace CogitoMini {
 				foreach (Channel c in Core.joinedChannels) { c.Dispose(); }
 				foreach (Logging.LogFile l in Core.ActiveUserLogs) { l.Dispose(); } //flushes and writes all extant user logs.
 				Core.SystemLog.Log("Shutting down.");
-				Console.WriteLine("Press enter to close...");
-				Console.ReadLine();
 				Environment.Exit(0);                                //exit with code 0 - all clear
 			}
 		}//plugin Shutdown
@@ -169,7 +169,7 @@ namespace CogitoMini {
 						}
 						else { m.Reply("Cannot parse '" + m.args[optIndex+1] + "' as number. Expected format: .minage <newMinAge> (-r Kick|Ignore|Warn|Alert)"); }
 					}
-					m.Reply(string.Format("Settings for channel '{0}': Control system {1}. Minimum age: {2}. Enforcement mode: {3}.", m.sourceChannel.Name, m.sourceChannel.minAge > 0 ? "enabled" : "disabled", m.sourceChannel.minAge, m.sourceChannel.underageResponse), false);
+					m.Reply(string.Format("Settings for channel '{0}': Control system {1}. Minimum age: {2}. Enforcement mode: {3}.", m.sourceChannel.Name, m.sourceChannel.minAge > 0 ? "enabled" : "disabled", m.sourceChannel.minAge, m.sourceChannel.underageResponse), IO.ReplyMode.AsOriginal);
 				}
 				try { Core.SaveAllSettingsBinary(); } //Core.SaveAllSettingsXML();
 				catch (Exception e) { Core.ErrorLog.Log(string.Format("Failed to save user data after changing settings for channel {1}, args {2} - {3}", m.sourceChannel, m.args, e.StackTrace)); }
@@ -202,55 +202,71 @@ namespace CogitoMini {
 
 				if (modeGreater && modeLesser) { m.Reply("Cannot scan for both GreaterThan and LesserThan. Decide."); return; }
 				if (modeAnonymous && !modeStatistic) { m.Reply("Deactivating mode anonymous is only supported with mode statistic."); return; }
-				if ((modeLesser || modeGreater) && !modeStatistic ) { modeStatistic = true; }
+				if ((modeLesser || modeGreater) && !modeStatistic) { modeStatistic = true; }
 				if (modeLesser || modeGreater) { cutoffValue = float.Parse(m.args[0]); m.args = m.args.Skip(1).ToArray(); }
 
 				List<User> dataPool = m.sourceChannel.Users.ToList();
-				await Task.WhenAll(dataPool.Select(n => n.GetBasicProfileInfo())).ConfigureAwait(false);
-
 				Dictionary<string, string> data = new Dictionary<string, string>(dataPool.Count);
-				data = dataPool.ToDictionary(x => x.Name, x => x.TryGetData(m.Body));
 				string results;
-				
+
+				Task DataScan = Task.WhenAll(dataPool.Select(n => n.GetBasicProfileInfo()));
+				await DataScan;
+
+				data = dataPool.ToDictionary(x => x.Name, x => x.TryGetData(m.Body));
+
 				if (modeStatistic) { //transform all to numeric
-					Dictionary<string, float> numData = new Dictionary<string, float>(dataPool.Count);
-					int nullCount = 0;
-					int errorCount = 0;
-					foreach (var item in data) {
-						System.Text.RegularExpressions.Match match = Utils.RegularExpressions.Numbers.Match(item.Value);
-						if (match.Success) {
-							if (float.Parse(match.Value) == 0) { nullCount++; continue; }
-							numData.Add(item.Key, float.Parse(match.Value));
-						}
-						else {
-							Core.ErrorLog.Log("Error during Rexex Match of Scan() data for user " + item.Key + ", search item " + m.Body, true);	 
-							errorCount++;  
-						}
-					}
-					if (numData.Count == 0) { m.Reply("Could not find/parse any numeric data for input '" + m.Body + "'."); return; }
+					DataScan numData = await ProcessNumericData(data);
+					if (numData.values.Count == 0) { m.Reply("Could not find/parse any numeric data for input '" + m.Body + "'."); return; }
 					//TODO Instead of simpled regex, then float.parse, do utils.math.measurementFromNumber if you ever code it. (As if).
 					if (modeLesser || modeGreater) {
-						int fullCount = numData.Count;
-						int lesserCount = numData.Values.Where(x => x <= cutoffValue).Count();
-						results = string.Format(CultureInfo.InvariantCulture, "Comparative analysis complete. {0:0} of {1:0} users successfully parsed for '{2}'. {3} users had no value set, {4} failed parsing.\n{5:0} users have values {6} specified threshold of {7:0.0}.", fullCount, dataPool.Count, m.Body, nullCount, errorCount, modeLesser ? lesserCount : fullCount - lesserCount, modeLesser ? "below" : "above", cutoffValue);
+						int fullCount = numData.values.Count;
+						int lesserCount = numData.values.Values.Where(x => x <= cutoffValue).Count();
+						results = string.Format(CultureInfo.InvariantCulture, "Comparative analysis complete. {0:0} of {1:0} users successfully parsed for '{2}'. {3} users had no value set, {4} failed parsing.\n{5:0} users have values {6} specified threshold of {7:0.0}.", fullCount, dataPool.Count, m.Body, numData.nullcount, numData.errorcount, modeLesser ? lesserCount : fullCount - lesserCount, modeLesser ? "below" : "above", cutoffValue);
 					}
 					else {
-						float mean = numData.Values.Average();
+						float mean = numData.values.Values.Average();
 						//double? median = Utils.Math.Median(numData.Keys);
-						float _min = numData.Values.Min();
-                        string min = modeAnonymous ? _min.ToString("0.0", CultureInfo.InvariantCulture) + " [" + string.Join(", ", numData.Where(n => n.Value == _min).Select(n => n.Key)).TrimEnd(new char[] { ' ', ',' }) + "]" : _min.ToString("0.0", CultureInfo.InvariantCulture);
-						float _max = numData.Values.Max();
-						string max = modeAnonymous ? _max.ToString("0.0", CultureInfo.InvariantCulture) + " [" + string.Join(", ", numData.Where(n => n.Value == _max).Select(n => n.Key)).TrimEnd(new char[] { ' ', ',' }) + "]" : _max.ToString("0.0", CultureInfo.InvariantCulture);
-                        double stDev = Utils.Math.StDev(numData.Values);
-						results = string.Format(CultureInfo.InvariantCulture, "Statistical analysis complete. {0:0} of {1:0} users successfully parsed for '{2}'. {3} users had no value set, {4} failed parsing.\nMin: {5:0.0}. Max: {6:0.0}. Average: {7:0.0}. Standard deviation: {8:0.0}", numData.Count, dataPool.Count, m.Body, nullCount, errorCount, min, max, mean, stDev);
+						float _min = numData.values.Values.Min();
+						string min = modeAnonymous ? _min.ToString("0.0", CultureInfo.InvariantCulture) + " [" + string.Join(", ", numData.values.Where(n => n.Value == _min).Select(n => n.Key)).TrimEnd(new char[] { ' ', ',' }) + "]" : _min.ToString("0.0", CultureInfo.InvariantCulture);
+						float _max = numData.values.Values.Max();
+						string max = modeAnonymous ? _max.ToString("0.0", CultureInfo.InvariantCulture) + " [" + string.Join(", ", numData.values.Where(n => n.Value == _max).Select(n => n.Key)).TrimEnd(new char[] { ' ', ',' }) + "]" : _max.ToString("0.0", CultureInfo.InvariantCulture);
+						double stDev = Utils.Math.StDev(numData.values.Values);
+						results = string.Format(CultureInfo.InvariantCulture, "Statistical analysis complete. {0:0} of {1:0} users successfully parsed for '{2}'. {3} users had no value set, {4} failed parsing.\nMin: {5:0.0}. Max: {6:0.0}. Average: {7:0.0}. Standard deviation: {8:0.0}", numData.values.Count, dataPool.Count, m.Body, numData.nullcount, numData.errorcount, min, max, mean, stDev);
 					}
 				}
 				else {  //Histogram-type analysis, ~10 most frequent
 					int nullCount = data.Values.Where(x => x != "Not set").Count();
-                    Utils.Collections.Counter<string> DataTypes = new Utils.Collections.Counter<string>(data.Values.Where(x => x != "Not set"));
+					Utils.Collections.Counter<string> DataTypes = new Utils.Collections.Counter<string>(data.Values.Where(x => x != "Not set"));
 					results = string.Format(CultureInfo.InvariantCulture, "Quantitative analysis of {0} users for '{1}' complete. {2} users had no value set. {3} unique categories found, displaying a maximum of 10:\n{4}", dataPool.Count, m.Body, nullCount, DataTypes.Count, DataTypes.ToString(10));
 				}
-				m.Reply(results, false);
+				foreach (User u in dataPool) { u.Dispose(); }
+				m.Reply(results, IO.ReplyMode.AsOriginal);
+			}
+
+			internal struct DataScan {
+				internal Dictionary<string, float> values;
+				internal int nullcount;
+				internal int errorcount;
+			}
+
+			internal async Task<DataScan> ProcessNumericData(Dictionary<string, string> data) {
+				DataScan result = new DataScan();
+				result.errorcount = 0;
+				result.nullcount = 0;
+				await Task.Run(() => {
+					foreach (var item in data) {
+						System.Text.RegularExpressions.Match match = Utils.RegularExpressions.Numbers.Match(item.Value);
+						if (match.Success) {
+							if (float.Parse(match.Value) == 0) { result.nullcount++; continue; }
+							result.values.Add(item.Key, float.Parse(match.Groups[0].Value));
+						}
+						else {
+							Core.ErrorLog.Log("Error during Rexex Match of Scan() data for user " + item.Key, true);
+							result.errorcount++;
+						}
+					}
+				});
+				return result;
 			}
 		}// plugin scan
 
@@ -271,7 +287,7 @@ namespace CogitoMini {
 				if (m.Body.Length < 7) { m.Reply("That's waaaaaay too short to make a rainbow out of."); }
 				string[] Chunked = Utils.StringManipulation.Chunk(7, m.Body);
 				if (Chunked.Length != 7) { Console.WriteLine("INVALID RAINBOW CHUNKS - " + Chunked.ToString()); return; }
-				m.Reply(string.Format("[color=red]{0}[/color][color=orange]{1}[/color][color=yellow]{2}[/color][color=green]{3}[/color][color=cyan]{4}[/color][color=blue]{5}[/color][color=purple]{6}[/color]", Chunked[0], Chunked[1], Chunked[2], Chunked[3], Chunked[4], Chunked[5], Chunked[6]), false);
+				m.Reply(string.Format("[color=red]{0}[/color][color=orange]{1}[/color][color=yellow]{2}[/color][color=green]{3}[/color][color=cyan]{4}[/color][color=blue]{5}[/color][color=purple]{6}[/color]", Chunked[0], Chunked[1], Chunked[2], Chunked[3], Chunked[4], Chunked[5], Chunked[6]), IO.ReplyMode.AsOriginal);
 			}
 		}// plugin Rainbowtext
 
@@ -303,13 +319,13 @@ namespace CogitoMini {
 				int month = 0;
 				System.Text.RegularExpressions.Match DateSearch = Utils.RegularExpressions.Dates.Match(m.Body);
 				day = DateSearch.Groups["day"].Success ? int.Parse(DateSearch.Groups["day"].Value) : 0;
-				if (day == 0 || day > 31) { m.Reply("Invalid day format; unable to parse date. Please try again with e.g. .hs dd.mm", false); return; }
-				
+				if (day == 0 || day > 31) { m.Reply("Invalid day format; unable to parse date. Please try again with e.g. .hs dd.mm", IO.ReplyMode.AsOriginal); return; }
+
 				if (DateSearch.Groups["month"].Success && !int.TryParse(DateSearch.Groups["month"].Value, out month)) {
 					string _month = DateSearch.Groups["month"].Value.ToLowerInvariant();
 					if (months.Contains(_month)) { month = Array.IndexOf(months, _month) + 1; }
 				}
-				if (month == 0) { m.Reply("Invalid month format; unable to parse date. Please try again with e.g. .hs dd.mm", false); return; }
+				if (month == 0) { m.Reply("Invalid month format; unable to parse date. Please try again with e.g. .hs dd.mm", IO.ReplyMode.AsOriginal); return; }
 				if (month > 12) {
 					int i = day;
 					day = month;
@@ -320,14 +336,15 @@ namespace CogitoMini {
 				string horoscope;
 				Utils.Math.Shuffle(horoscopes);
 				horoscope = "[" + sign + "]: " + horoscopes[0] + " " + horoscopes[1];
-				horoscope = horoscope.Replace("{NAME}", Utils.Math.RandomChoice(m.sourceChannel.Users).Name);
+				if (m.sourceChannel != null) { horoscope = horoscope.Replace("{NAME}", Utils.Math.RandomChoice(m.sourceChannel.Users).Name); }
+				else { horoscope = horoscope.Replace("{NAME}", Utils.Math.RandomChoice(Core.globalOps).Name); }
 				horoscope = horoscope.Replace("{DAY}", Utils.Math.RandomChoice(days));
 				horoscope = horoscope.Replace("{ELEMENT}", Utils.Math.RandomChoice(elements));
 				horoscope = horoscope.Replace("{SIGN}", sign);
 				string rsign = sign;
 				while (rsign == sign) { rsign = Utils.Math.RandomChoice(signs.Values); }
 				horoscope = horoscope.Replace("{RSIGN}", rsign);
-				m.Reply(horoscope, false);
+				m.Reply(horoscope, IO.ReplyMode.AsOriginal);
 			}
 
 		}// plugin horoscope
@@ -337,7 +354,7 @@ namespace CogitoMini {
 			public override string Description { get { return "Allows acting through Cogito"; } }
 			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "ri"); } }
 			public override AccessLevel AccessLevel { get { return AccessLevel.ChannelOps; } }
-			public override AccessPath AccessPath { get { return AccessPath.All; } }
+			public override AccessPath AccessPath { get { return AccessPath.PMOnly; } }
 
 			public override void MessageLoopMethod(Message m) { return; }
 			public override void ShutdownMethod() { return; }
@@ -352,10 +369,10 @@ namespace CogitoMini {
 				m.args = m.args.Where(n => n != "-s").ToArray();
 				bool modeAct = m.args.Contains("-a") ? true : false;
 				m.args = m.args.Where(n => n != "-a").ToArray();
-				if ((modeRaw ? 1 : 0) + (modeSay ? 1 : 0) + (modeAct ? 1 : 0) > 1) { m.Reply("One mode only.", true); return; }
+				if ((modeRaw ? 1 : 0) + (modeSay ? 1 : 0) + (modeAct ? 1 : 0) > 1) { m.Reply("One mode only.", IO.ReplyMode.ForcePM); return; }
 				if (modeRaw) { Core.websocket.Send(m.Body); return; }
-				if (modeAct) { m.Reply("/me " + m.Body); }
-				else { m.Reply(m.Body); }
+				if (modeAct) { m.Reply("/me " + m.Body, IO.ReplyMode.ForceChannel); }
+				else { m.Reply(m.Body, IO.ReplyMode.ForceChannel); }
 			}
 
 		}// plugin DEFAULT
@@ -379,27 +396,99 @@ namespace CogitoMini {
 					Core.ErrorLog.Log("No channel attached to whitelist request: " + m.Body); 
 					return;
 				}
-				if (m.args.Length < 1) { Core.ErrorLog.Log("Insufficient args for execution of .whitelist: " + m.Body);  m.Reply("No whitelist ID detected for authorization."); }
-				int TargetIndex = -1;
-				string TargetUser = null;
-				if (!int.TryParse(m.args[0], out TargetIndex)) { m.Reply("Unable to parse '" + m.args[0] + " as a valid whilelist target for channel '" + m.sourceChannel.Name + "'."); return; } 
-				else { TargetUser = m.sourceChannel.WhitelistQueue[TargetIndex]; }
-				if (TargetUser != null) {
-					if (!m.sourceChannel.WhitelistQueue.Contains(TargetUser)) { m.Reply("User '" + TargetUser + "' is not listed in the whitelist queue of channel '" + m.sourceChannel.Name + "'. Note that only unparseable or users with no listed age are considered for whitelisting."); }
-					else {
-						m.sourceChannel.Whitelist.Add(TargetUser);
-						m.sourceChannel.ChannelModLog.Log(string.Format("Adding user '{0}' to channel whitelist by order of '{1}' ({2})", TargetUser, m.sourceUser.Name, m.AccessLevel));
-						m.Reply("User '" + TargetUser + "' successfully added to whitelist for channel '" + m.sourceChannel.Name + "'.");
-						m.sourceChannel.WhitelistQueue.Remove(TargetUser);
-					}
+				if (m.args.Length < 1) {
+					m.Reply("Current whitelist for Channel '" + m.sourceChannel.Name + "':\n" + string.Join(", ", m.sourceChannel.Whitelist).TrimEnd(','));
+					return;
+				}
+				string TargetUser = m.Body;
+                if (!m.sourceChannel.Users.Select(x => x.Name).Contains(TargetUser)) { 
+					m.Reply("'" + TargetUser + " is not currently a user of channel '" + m.sourceChannel.Name + "'. For security purposes, and to avoid misspelling issues, only users in the channel can be added to the whitelist.");
+					return; 
+				}
+				else {
+					m.sourceChannel.Whitelist.Add(TargetUser);
+					m.sourceChannel.ChannelModLog.Log(string.Format("Adding user '{0}' to channel whitelist by order of '{1}' ({2})", TargetUser, m.sourceUser.Name, m.AccessLevel));
+					m.Reply("User '" + TargetUser + "' successfully added to whitelist for channel '" + m.sourceChannel.Name + "'.");
 				}
 			}
+		}// plugin DEFAULT
+
+		sealed class ListChannels : CogitoPlugin { //TODO
+			public override string Name { get { return "Channel List"; } }
+			public override string Description { get { return "Returns the names and command indices of all currently joined channels"; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "ls"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.Everyone; } }
+			public override AccessPath AccessPath { get { return AccessPath.PMOnly; } }
+
+			public override void MessageLoopMethod(Message m) { return; }
+			public override void ShutdownMethod() { return; }
+			public override void SetupMethod() { return; }
+
+			public override IHost Host { get { return Core.pluginHost; } }
+
+			public override void PluginMethod(Message m) {
+				string reply = "Currently joined channels, ordered by their Redirect Key, are:\n";
+				for (int i = 0; i < Core.joinedChannels.Count; i++) { reply += string.Format("\t{0}: '{1}' [{2}]\n", i, Core.joinedChannels[i].Name, Core.joinedChannels[i].Key); }
+				m.Reply(reply, IO.ReplyMode.ForcePM);
+			}
+
+		}// plugin DEFAULT
+
+		sealed class Admin : CogitoPlugin { //TODO
+			public override string Name { get { return "Adminstration Tools"; } }
+			public override string Description { get { return "Allows execution of channel Op commands via Cogito"; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "op"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.Everyone; } }
+			public override AccessPath AccessPath { get { return AccessPath.All; } }
+
+			public override void MessageLoopMethod(Message m) { return; }
+			public override void ShutdownMethod() { return; }
+			public override void SetupMethod() { return; }
+
+			public override IHost Host { get { return Core.pluginHost; } }
+
+			public override void PluginMethod(Message m) {
+				if (m.sourceChannel == null) { m.Reply("No source channel attached to command. Either use command from within a channel, or use the redirect operator '" + Config.AppSettings.RedirectOperator + "' plus a channel ID number starting at 0 (obtained using .ls) to select the correct channel."); return; }
+				bool modeKick = m.args.Contains("-k") ? true : false;
+				m.args = m.args.Where(n => n != "-k").ToArray();
+				bool modeBan = m.args.Contains("-b") ? true : false;
+				m.args = m.args.Where(n => n != "-b").ToArray();
+				bool modeTimeout = m.args.Contains("-t") ? true : false;
+				m.args = m.args.Where(n => n != "-t").ToArray();
+				bool modeSass = m.args.Contains("-s") ? true : false;
+				m.args = m.args.Where(n => n != "-s").ToArray();
+				//bool modeOp = m.args.Contains("-op") ? true : false;
+				//m.args = m.args.Where(n => n != "-op").ToArray();
+				//bool modeDeop = m.args.Contains("-deop") ? true : false;
+				//m.args = m.args.Where(n => n != "-deop").ToArray();
+				int timeoutLength = -1;
+				if (m.args.Length < 1) { m.Reply("Not enough arguments supplied. Need at least mode and target name."); return; }
+				if (modeTimeout && int.TryParse(m.args[0], out timeoutLength)) { m.args = m.args.Skip(1).ToArray(); } 
+				string TargetUser = m.Body, sassMessage = "";
+				if ((modeKick ? 1 : 0) + (modeBan ? 1 : 0) + (modeTimeout ? 1 : 0) > 1) { m.Reply("One mode only!", IO.ReplyMode.ForcePM); return; }
+				if (!m.sourceChannel.Users.Select(x => x.Name).Contains(TargetUser)) { m.Reply("Target '" + TargetUser + "' is not currently in channel '" + m.sourceChannel.Name + "'. Unable to comply."); return; }
+				User target = m.sourceChannel.Users.Where(x => x.Name == TargetUser).First();
+                if (modeKick) {
+					sassMessage = "Subject " + TargetUser + ". Enforcement mode: Channel Kick. Please aim calmly and subdue the target.";
+					target.Kick(m.sourceChannel);
+				}
+				if (modeBan) {
+					sassMessage = "Subject " + TargetUser + ". The target’s threat judgement has been reappraised. Enforcement mode: Channel Ban. Trigger safety released. Aim carefully and eliminate the target.";
+					target.Ban(m.sourceChannel);
+				}
+				if (modeTimeout) {
+					sassMessage = string.Format("Subject {0}. Enforcement mode: Time out for {1} {2}. Please aim calmly and subdue the target.", TargetUser, timeoutLength, timeoutLength == 1 ? "minute" : "minutes");
+					target.Timeout(m.sourceChannel, timeoutLength);
+				}
+				if (modeSass) { m.Reply(sassMessage, IO.ReplyMode.ForceChannel); }
+			}
+
 		}// plugin DEFAULT
 
 		sealed class DEFAULT : CogitoPlugin {
 			public override string Name { get { return ""; } }
 			public override string Description { get { return ""; } }
-			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "shutdown"); } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "TRIGGER"); } }
 			public override AccessLevel AccessLevel { get { return AccessLevel.Everyone; } }
 			public override AccessPath AccessPath { get { return AccessPath.All; } }
 

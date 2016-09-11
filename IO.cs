@@ -4,12 +4,13 @@ using System.IO;
 using System.Timers;
 using Newtonsoft.Json;
 
-namespace CogitoMini.IO
-{
+namespace CogitoMini.IO {
 
-	public class MessageEventArgs : EventArgs{ 
-		
-	}	
+	public class MessageEventArgs : EventArgs {
+
+	}
+
+	enum ReplyMode { AsOriginal, ForcePM, ForceChannel }	
 
     class SystemCommand{
 		internal protected string OpCode { get; set; }
@@ -59,8 +60,6 @@ namespace CogitoMini.IO
 	} //class SystemCommand
 
 	class Message : SystemCommand{
-		internal new User sourceUser = null;
-		internal new Channel sourceChannel = null;
 		internal AccessLevel AccessLevel = new AccessLevel();
 
 		/// <summary> Maximum length (in bytes) of a channel message; longer and you gotta split it </summary>
@@ -74,6 +73,16 @@ namespace CogitoMini.IO
 		internal string Body{
 			get { return Data["message"].ToString(); }
 			set{ Data["message"] = value; }
+		}
+
+		internal string Channel {
+			get { return Data["channel"].ToString(); }
+			set { Data["channel"] = value; }
+		}
+
+		internal string Recipient {
+			get { return Data["recipient"].ToString(); }
+			set { Data["recipient"] = value; }
 		}
 
 		internal string[] args { 
@@ -103,8 +112,8 @@ namespace CogitoMini.IO
 		internal new void Send(){
 			if (sourceUser == null && sourceChannel == null) { throw new ArgumentNullException("Attempted to send a chat message with no user or channel specified"); }
 			if (OpCode == null) { OpCode = sourceUser == null ? "MSG" : "PRI"; } //sets Opcode to MSG (send to entire channel) if no user is specified, else to PRI (only to user)
-			if (sourceUser != null) { Data["recipient"] = sourceUser.Name; }
-			if (sourceChannel != null) { Data["channel"] = sourceChannel.Key; }
+			if (sourceUser != null) { Recipient = sourceUser.Name; }
+			if (sourceChannel != null) { Channel = sourceChannel.Key; }
 
 			//This should, in theory, make sure we don't send any too-long messages.
 			//y u no autosplit your buffer
@@ -133,16 +142,27 @@ namespace CogitoMini.IO
 		/// </summary>
 		/// <param name="replyText">Text to reply with.</param>
 		/// <param name="forcePrivate">Should the message be sent as private regardless of parent message origin?</param>
-		internal void Reply(string replyText, bool forcePrivate = true){ 
+		internal void Reply(string replyText, ReplyMode ReplyMode = ReplyMode.AsOriginal) { 
 			Message reply = new Message(replyText, this);
-			reply.OpCode = forcePrivate ? "PRI" : "MSG";
+			switch (ReplyMode) {
+				case ReplyMode.AsOriginal:
+					break;
+
+				case ReplyMode.ForceChannel:
+					if (reply.sourceChannel != null) { reply.OpCode = "MSG"; }
+					break;
+
+				case ReplyMode.ForcePM:
+					reply.OpCode = "PRI";
+					break;
+			}
 			reply.Send();
 		}
 
 		public override string ToString(){
 			string _message;
-			if (Data["message"].ToString().StartsWith("/me")) { _message = sourceUser.Name + Data["message"].ToString().Substring(3); }
-			else {_message = sourceUser.Name + ": " + Data["message"].ToString();}
+			if (Body.StartsWith("/me")) { _message = sourceUser.Name + Body.Substring(3); }
+			else {_message = sourceUser.Name + ": " + Body;}
 			return _message;
 		}
 	} //class Message

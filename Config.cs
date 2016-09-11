@@ -59,6 +59,7 @@ namespace CogitoMini
 			internal const int MessageBufferSize = 1024;
 			internal static string[] IgnoreCommands = {"LIS", "NLN", "STA", "ORS", "FLN", "CHA", "MSG"};
 			internal static UnderageReponse DefaultResponse = UnderageReponse.Alert;
+			internal const string RedirectOperator = "=>";
 		}
 
 		//internal static Dictionary<string, Delegate> AITriggers = new Dictionary<string, Delegate>();
