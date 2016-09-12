@@ -38,7 +38,7 @@ namespace CogitoMini {
 
 		/// <summary> xXxSEPHIROTHxXx </summary>
 		public readonly string Name = null;
-		public readonly string _Name = null;
+		//public readonly string _Name = null;
 
 		/// <summary> 2 shota 4 u </summary>
 		public int Age {
@@ -91,7 +91,7 @@ namespace CogitoMini {
 
 		public User(string nName) {
 			Name = nName.Trim('\t', '\r', '\n', ' ');
-			_Name = nName.ToLowerInvariant();
+			//_Name = nName.ToLowerInvariant();
 			Age = -1;
 			Core.allGlobalUsers.Add(this);
 		}
@@ -103,28 +103,29 @@ namespace CogitoMini {
 		public void Message(string message, string Opcode = "PRI") {
 			IO.Message m = new IO.Message();
 			m.sourceUser = this;
+			m.OpCode = Opcode;
 			m.Body = message;
 			m.Send();
 		}
 
-		public override int GetHashCode() { return _Name.GetHashCode(); }
+		public override int GetHashCode() { return Name.GetHashCode(); }
 
 		public bool Equals(User user) {
-			if (_Name == user._Name) { return true; }
+			if (Name == user.Name) { return true; }
 			else { return false; }
 		}
 
 		public override bool Equals(object obj) {
 			if (obj == null) { return false; }
 			User o = obj as User;
-			if (_Name == o._Name) { return true; }
+			if (Name == o.Name) { return true; }
 			else { return false; }
 		}
 
 		public int CompareTo(object obj) {
 			if (obj == null) { return 1; }
 			User o = obj as User;
-			if (o != null) { return _Name.CompareTo(o._Name); }
+			if (o != null) { return Name.CompareTo(o.Name); }
 			else { throw new ArgumentException("Object cannot be made into User. Cannot CompareTo()."); }
 		}
 

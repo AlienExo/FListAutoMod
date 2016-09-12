@@ -204,10 +204,9 @@ namespace CogitoMini {
 
 		internal async void CheckAge(string Username) {
 			if (Whitelist.Contains(Username)) { return; }
-			User u = new User(Username);
-			await u.GetBasicProfileInfo();
+			User u = Core.getUser(Username);
+			if ((DateTime.Now - u.dataTakenOn) >= Config.AppSettings.userProfileRefreshPeriod) { await u.GetBasicProfileInfo(); }
 			//await GetBasicProfileInfo();
-			//Console.WriteLine(string.Format("User {0} has entered channel {1}. User age is {2}, channel minage is {3}", Name, c.Name, Age, c.minAge));
 			if (u.Age <= 0 && underageResponse != UnderageReponse.Ignore) {
 				int ChannelInteger = Core.joinedChannels.Contains(this) ? Core.joinedChannels.IndexOf(this) : -1;
 				if (ChannelInteger == -1) { Core.ErrorLog.Log("Target Channel " + Name + " is not registered in Core.joinedChannels and should not be being monitored..."); return; }
@@ -219,14 +218,14 @@ namespace CogitoMini {
 				switch (underageResponse) {
 					default:
 					case UnderageReponse.Alert:
-						TryAlertMod(Name, string.Format("[b]Warning![/b] User '{0}' is below minimum age ({1}) for channel '{2}'. Auto-Kick is disabled. Please proceed manually.", u.Name, minAge, Name));
+						TryAlertMod(Name, string.Format("[b][color=Red]Warning![/color][/b] User '{0}' is below minimum age ({1}) for channel '{2}'. Auto-Kick is disabled. Please proceed manually.", u.Name, minAge, Name));
 						break;
 
 					case UnderageReponse.Ignore:
 						break;
 
 					case UnderageReponse.Kick:
-						Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}' and will be removed. You are welcome to join with an of-age character. Have a nice day.", u.Name, minAge, Name));
+						u.Message(string.Format("This is an automated message. You, user '{0}', are below the minimum age ({1}) for channel '{2}' and will be removed. You are welcome to join with an of-age character. Have a nice day.", u.Name, minAge, Name));
 						Kick(u);
 						break;
 
@@ -236,7 +235,6 @@ namespace CogitoMini {
 						break;
 				}
 			}
-			u.Dispose();
 		}
 	}
 }

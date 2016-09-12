@@ -200,6 +200,7 @@ namespace CogitoMini.IO {
 			}
 
 			public void Log(IO.Message m, bool suppressPrint = false) {
+				if (m==null) { return; }
 				if (logFileStream == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
 				string chanStr = m.OpCode == "PRI" ? "[PM]" : "(" + m.sourceChannel.Name + ") [" + m.Data["channel"] + "]";
 				string s = string.Format("<{0}> -- {1} {2}{3}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), chanStr, m.ToString(), Environment.NewLine);

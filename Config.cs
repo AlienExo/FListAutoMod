@@ -42,24 +42,24 @@ namespace CogitoMini
 		}
 
 		internal static class AppSettings{
-			internal const	string Version = "1.1.2";
-            internal static TimeSpan reconnectionStagger = new TimeSpan(0, 0, 10);
-			internal static TimeSpan ticketLifetime = new TimeSpan(0, 29, 0);
-			internal static TimeSpan userProfileRefreshPeriod = new TimeSpan(0, 0, 10, 0);
+			internal const string Version = "1.1.3";
+            internal static readonly TimeSpan reconnectionStagger = new TimeSpan(0, 0, 10);
+			internal static readonly TimeSpan ticketLifetime = new TimeSpan(0, 29, 0);
+			internal static readonly TimeSpan userProfileRefreshPeriod = new TimeSpan(0, 1, 0, 0);
 			internal const long loggingInterval = 5000;
-			internal static string AppPath = AppDomain.CurrentDomain.BaseDirectory;
-			internal static string LoggingPath = AppPath + @"logs\";
-			internal static string PluginsPath = AppPath + @"plugins\";
-			internal static string DataPath = AppPath + @"data\";
-			//internal const string UserFileName = "Account";
+			internal static readonly string AppPath = AppDomain.CurrentDomain.BaseDirectory;
+			internal static readonly string LoggingPath = AppPath + @"logs\";
+			internal static readonly string PluginsPath = AppPath + @"plugins\";
+			internal static readonly string DataPath = AppPath + @"data\";
 			internal const string UserDBFileName = "Users";
 			internal const string ChannelDBFileName = "Channels";
 			internal const string MasterKey = "1eccda8e49a5f5aa10a5b2bcf58514ff9791c426"; // 0 x Query Exiv Obe Exec TzW
 			internal const string TriggerPrefix = ".";
 			internal const int MessageBufferSize = 1024;
-			internal static string[] IgnoreCommands = {"LIS", "NLN", "STA", "ORS", "FLN", "CHA", "MSG"};
+			internal static readonly string[] IgnoreCommands = {"LIS", "NLN", "STA", "ORS", "FLN", "CHA", "MSG"};
 			internal static UnderageReponse DefaultResponse = UnderageReponse.Alert;
 			internal const string RedirectOperator = "=>";
+			internal static readonly TimeSpan DataPurgeAndBackupPeriod = new TimeSpan(0, 10, 0);
 		}
 
 		//internal static Dictionary<string, Delegate> AITriggers = new Dictionary<string, Delegate>();

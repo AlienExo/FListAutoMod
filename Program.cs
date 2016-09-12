@@ -404,9 +404,12 @@ namespace CogitoMini
 		}
 
 		internal static void ProcessCommandFromQueue(object stateobject) {
-			if ((DateTime.Now - LastPurge) > Config.AppSettings.userProfileRefreshPeriod) {
-				allGlobalUsers.Where(x => (x.hasData || x.Ignore) == false).Select(y => allGlobalUsers.Remove(y));
+			if ((DateTime.Now - LastPurge) > Config.AppSettings.DataPurgeAndBackupPeriod) {
+				int oldCount = allGlobalUsers.Count();
+				allGlobalUsers.Where(x => ((x.hasData && (DateTime.Now - x.dataTakenOn < Config.AppSettings.userProfileRefreshPeriod)) || x.Ignore) == false).Select(y => allGlobalUsers.Remove(y));
 				LastPurge = DateTime.Now;
+				SystemLog.Log(string.Format("Purged allGlobalUsers, {0} Users -> {1} Users", oldCount, allGlobalUsers.Count()));
+				SaveAllSettingsBinary();
 			}
 			if (IncomingMessageQueue.Count > 0) {
 				SystemCommand C = IncomingMessageQueue.Dequeue();
@@ -526,7 +529,7 @@ namespace CogitoMini
 		/// <param name="username">Username (string) to look for</param>
 		/// <returns>User instance</returns>
 		public static User getUser(string username){
-			return allGlobalUsers.Count(x => x._Name == username.ToLowerInvariant()) > 0 ? allGlobalUsers.First(n => n._Name == username.ToLowerInvariant()) : new User(username);
+			return allGlobalUsers.Count(x => x.Name == username) > 0 ? allGlobalUsers.First(n => n.Name == username) : new User(username);
 		}
 		
 		///// <summary> Overloaded in order to immediately return User instances, as may happen...?

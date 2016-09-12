@@ -483,7 +483,7 @@ namespace CogitoMini
 					}
 				}
 				if (Core.globalOps.Contains(m.sourceUser)) { m.AccessLevel = AccessLevel.GlobalOps; }
-				if (Core.Ops.Select(n => n.ToLowerInvariant()).Contains(m.sourceUser._Name)) { m.AccessLevel = AccessLevel.RootOnly; }
+				if (Core.Ops.Contains(m.sourceUser.Name)) { m.AccessLevel = AccessLevel.RootOnly; }
 
 				try {
 					CogitoPlugin AIMethod = Config.AITriggers[TargetMethod];
@@ -494,7 +494,10 @@ namespace CogitoMini
 						}
 						AIMethod.PluginMethod(m);
 					}
-					else { m.Reply(string.Format("You do not have the neccessary access permissions to execute {0} in channel {1}.", TargetMethod, m.sourceChannel.Name)); }
+					else {
+						if (AIMethod.AccessLevel == AccessLevel.ChannelOps && m.sourceChannel.Mods.Select(x => x.Name.ToLowerInvariant()).Contains(m.sourceUser.Name.ToLowerInvariant())) { m.Reply("The mod list for channel '" + m.sourceChannel.Name + "' does not appear to contain your character name in the correct capitalization. This is an error with [b]Fserv/FList[/b] (which doesn't check capitalization when making someone a mod), [u][b]not[/b][/u] Cogito.\nF-List will probably not recognize you as a mod (test this by trying to kick someone willing).\nPlease contact the channel owner/another moderator, demod the bad entry, and get modded with the right capitalisation.\nWe apologise for any inconvenience.\n\nCurrent modlist:" + string.Join("\n\t", m.sourceChannel.Mods.Select(x => x.Name))); }
+						else { m.Reply(string.Format("You do not have the neccessary access permissions to execute {0} in channel {1}. Check channel modlist for capitalisation, or contact Cogito's owner (see profile).", TargetMethod, m.sourceChannel.Name)); }
+					}
 				}
 				catch (KeyNotFoundException NoMethod) { Core.ErrorLog.Log(string.Format("Invocation of Bot Method {0} failed, as the method is not registered in the AITriggers.Triggers dictionary or does not exist:\n\t{1}\n\t{2}", m.OpCode, NoMethod.Message, NoMethod.InnerException)); }
 				catch (TargetException NoMethod) { Core.ErrorLog.Log(string.Format("Invocation of Bot Method {0} failed, as the method does not exist:\n\t{1}\n\t{2}", m.OpCode, NoMethod.Message, NoMethod.InnerException)); }
