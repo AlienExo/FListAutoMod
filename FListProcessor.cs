@@ -453,7 +453,6 @@ namespace CogitoMini
 		internal static void ProcessPossibleCommand(Message m) {
 			AccessPath accesspath = new AccessPath();
 			string TargetMethod = m.args[0];
-			m.args = m.args.Skip(1).ToArray();
 			
 			if (m.sourceChannel != null) {
 				if (m.sourceChannel.Mods.Contains(m.sourceUser)) { m.AccessLevel++; }
@@ -462,6 +461,7 @@ namespace CogitoMini
 			else { accesspath = AccessPath.PMOnly; }
 
 			if (TargetMethod.StartsWith(Config.AppSettings.TriggerPrefix) && Config.AITriggers.ContainsKey(TargetMethod)) {
+				m.args = m.args.Skip(1).ToArray(); //remove Trigger 
 				if (m.args.Length >= 2) {
 					int chanIndex = -1;
 					if (m.args[m.args.Length - 2] == Config.AppSettings.RedirectOperator && int.TryParse(m.args[m.args.Length - 1], out chanIndex)) {
@@ -471,15 +471,15 @@ namespace CogitoMini
 				}
 				if (Core.globalOps.Contains(m.sourceUser)) { m.AccessLevel = AccessLevel.GlobalOps; }
 				if (Core.Ops.Select(n => n.ToLowerInvariant()).Contains(m.sourceUser._Name)) { m.AccessLevel = AccessLevel.RootOnly; }
-				
+
 				try {
 					CogitoPlugin AIMethod = Config.AITriggers[TargetMethod];
 					if (m.AccessLevel >= AIMethod.AccessLevel && accesspath >= AIMethod.AccessPath) {
 						if (m.AccessLevel >= AccessLevel.ChannelOps) {
 							if (m.sourceChannel != null) { m.sourceChannel.ChannelModLog.Log(string.Format("Executing command {0} by order of {1} [{2}], channel {3}. Args: {4}", TargetMethod, m.sourceUser.Name, m.AccessLevel, m.sourceChannel.Name, m.Body)); }
-							else { Core.ModLog.Log(string.Format("Executing command {0} by order of {1} [{2}], via PM. Args: '{3}'",  TargetMethod, m.sourceUser.Name, m.AccessLevel, m.Body)); }
+							else { Core.ModLog.Log(string.Format("Executing command {0} by order of {1} [{2}], via PM. Args: '{3}'", TargetMethod, m.sourceUser.Name, m.AccessLevel, m.Body)); }
 						}
-						AIMethod.PluginMethod(m); 
+						AIMethod.PluginMethod(m);
 					}
 					else { m.Reply(string.Format("You do not have the neccessary access permissions to execute {0} in channel {1}.", TargetMethod, m.sourceChannel.Name)); }
 				}
@@ -488,6 +488,8 @@ namespace CogitoMini
 				catch (ArgumentException WrongData) { Core.ErrorLog.Log(string.Format("Invocation of Bot Method {0} failed, due to a wrong argument:\n\t{1}\n\t{2}", m.OpCode, WrongData.Message, WrongData.InnerException)); }
 				catch (Exception FuckUp) { Core.ErrorLog.Log(string.Format("Invocation of Bot Method {0} failed due to an unexpected error:\n\t{1}\n\t{2}", m.OpCode, FuckUp.Message, FuckUp.InnerException)); }
 			}
+
+			else { OnChatMessage(m); } //raise MessageEvent to signal to plugins ~eine nachricht has arrived~
 		}
 
 		internal static void ProcessModMessageQueue(User u) {
@@ -518,5 +520,8 @@ namespace CogitoMini
 			u.Message(FullMessage);
 		}
 
+		internal delegate void ChatMessageEventHandler(Message m);
+		internal static event ChatMessageEventHandler ChatMessage;
+		internal static void OnChatMessage(Message m) { if (m != null) { ChatMessage(m); } }
 	}
 }

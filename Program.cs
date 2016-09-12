@@ -331,10 +331,10 @@ namespace CogitoMini
 			if (OutgoingMessageQueue.Count > 0){
 				try{
 					string _message = OutgoingMessageQueue.Dequeue().ToServerString();
-					Core.RawData.Log(">> " + _message);
+					RawData.Log(">> " + _message);
 					websocket.Send(_message);
 				}
-				catch (Exception ex) { Core.ErrorLog.Log(String.Format("Sending message failed:\n\t{0}\n\t{1}\t{2}", ex.Message, ex.InnerException, ex.StackTrace)); }
+				catch (Exception ex) { ErrorLog.Log(string.Format("Sending message failed:\n\t{0}\n\t{1}\t{2}", ex.Message, ex.InnerException, ex.StackTrace)); }
 			}
 		}
 		internal static bool _sendForever = true;
@@ -386,7 +386,7 @@ namespace CogitoMini
 			}
 			allGlobalUsers = DeserializeBinaryDatabase<User>(Config.AppSettings.UserDBFileName);
 			channels = DeserializeBinaryDatabase<Channel>(Config.AppSettings.ChannelDBFileName);
-			Ops.AddRange(Core.XMLConfig["botOps"].Split(';'));
+			Ops.AddRange(XMLConfig["botOps"].Split(';'));
 			
 			DateTime LastPurge = DateTime.Now;
 
@@ -402,7 +402,7 @@ namespace CogitoMini
 			_quitEvent.WaitOne(); //keep websockets open and blocks thread until tripped
 
 			Core.SystemLog.Log("Saving channel and user data to hard drive...");
-			if (websocket.State == WebSocket4Net.WebSocketState.Open) { Core.websocket.Close(); }
+			if (websocket.State == WebSocketState.Open) { Core.websocket.Close(); }
 			while (IncomingMessageQueue.Count > 0) { try { ProcessCommandFromQueue(new object()); } catch (Exception e) { ErrorLog.Log("Exception in command processing during shutdown: " + e.Message); } }
 			SaveAllSettingsBinary();
 			foreach (Channel c in joinedChannels) { c.Dispose(); }

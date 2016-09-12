@@ -85,15 +85,16 @@ namespace CogitoMini {
 					else { Core.ErrorLog.Log("Attempted to load duplicate plugin, type '" + plugin.Name + "'."); }
 				}
 			}
-			AddInternalPlugin<Shutdown>();
-			AddInternalPlugin<Minage>();
-			AddInternalPlugin<Scan>();
-			AddInternalPlugin<RainbowText>();
-			AddInternalPlugin<Horoscopes>();
-			AddInternalPlugin<Whitelist>();
-			AddInternalPlugin<Remote>();
 			AddInternalPlugin<Admin>();
+			AddInternalPlugin<Horoscopes>();
 			AddInternalPlugin<ListChannels>();
+			AddInternalPlugin<Minage>();
+			AddInternalPlugin<RainbowText>();
+			AddInternalPlugin<Remote>();
+			AddInternalPlugin<Scan>();
+			AddInternalPlugin<Shutdown>();
+			AddInternalPlugin<Whitelist>();
+			AddInternalPlugin<YouTube>();
 		}
 
 		private static void AddInternalPlugin<T>() where T: CogitoPlugin, new() {
@@ -358,13 +359,21 @@ namespace CogitoMini {
 				m.args = m.args.Where(n => n != "-s").ToArray();
 				bool modeAct = m.args.Contains("-a") ? true : false;
 				m.args = m.args.Where(n => n != "-a").ToArray();
-				if ((modeRaw ? 1 : 0) + (modeSay ? 1 : 0) + (modeAct ? 1 : 0) > 1) { m.Reply("One mode only.", IO.ReplyMode.ForcePM); return; }
+				bool modePrivate = m.args.Contains("-p") ? true : false;
+				m.args = m.args.Where(n => n != "-p").ToArray();
+				if ((modeRaw ? 1 : 0) + (modeSay ? 1 : 0) + (modeAct ? 1 : 0) + (modePrivate ? 1 : 0) > 1) { m.Reply("One mode only, please!", ReplyMode.ForcePM); return; }
+				if (modePrivate) { 
+					Message m2 = new Message(m);
+					m2.args = m.args.Skip(1).ToArray();
+					m2.OpCode = "PRI";
+					m2.Send();
+				 }
 				if (modeRaw) { Core.websocket.Send(m.Body); return; }
-				if (modeAct) { m.Reply("/me " + m.Body, IO.ReplyMode.ForceChannel); }
-				else { m.Reply(m.Body, IO.ReplyMode.ForceChannel); }
+				if (modeAct) { m.Reply("/me " + m.Body, IO.ReplyMode.ForceChannel); return; }
+				else { m.Reply(m.Body, ReplyMode.ForceChannel); }
 			}
 
-		}// plugin DEFAULT
+		}// plugin Remote
 
 		sealed class Whitelist : CogitoPlugin {
 			public override string Name { get { return "Whitelist"; } }
@@ -400,7 +409,7 @@ namespace CogitoMini {
 					m.Reply("User '" + TargetUser + "' successfully added to whitelist for channel '" + m.sourceChannel.Name + "'.");
 				}
 			}
-		}// plugin DEFAULT
+		}// plugin Whitelist
 
 		sealed class ListChannels : CogitoPlugin { //TODO
 			public override string Name { get { return "Channel List"; } }
@@ -416,12 +425,26 @@ namespace CogitoMini {
 			public override IHost Host { get { return Core.pluginHost; } }
 
 			public override void PluginMethod(Message m) {
-				string reply = "Currently joined channels, ordered by their Redirect Key, are:\n";
-				for (int i = 0; i < Core.joinedChannels.Count; i++) { reply += string.Format("\t{0}: '{1}' [{2}]\n", i, Core.joinedChannels[i].Name, Core.joinedChannels[i].Key); }
-				m.Reply(reply, IO.ReplyMode.ForcePM);
+
+				bool modeJoin = m.args.Contains("-j") ? true : false;
+				m.args = m.args.Where(n => n != "-j").ToArray();
+
+				bool modeLeave = m.args.Contains("-l") ? true : false;
+				m.args = m.args.Where(n => n != "-l").ToArray();
+
+				if (modeJoin && modeLeave) { m.Reply("One mode only, please!"); }
+
+				if (modeJoin || modeLeave) {
+					string targetChannel = m.Body;
+				}
+				else {
+					string reply = "Currently joined channels, ordered by their Redirect Key, are:\n";
+					for (int i = 0; i < Core.joinedChannels.Count; i++) { reply += string.Format("\t{0}: '{1}' [{2}]\n", i, Core.joinedChannels[i].Name, Core.joinedChannels[i].Key); }
+					m.Reply(reply, IO.ReplyMode.ForcePM);
+				}
 			}
 
-		}// plugin DEFAULT
+		}// plugin ListChannel
 
 		sealed class Admin : CogitoPlugin { //TODO
 			public override string Name { get { return "Adminstration Tools"; } }
@@ -472,7 +495,42 @@ namespace CogitoMini {
 				if (modeSass) { m.Reply(sassMessage, IO.ReplyMode.ForceChannel); }
 			}
 
-		}// plugin DEFAULT
+		}// plugin Admin
+
+		sealed class YouTube : CogitoPlugin {
+			public override string Name { get { return "YouTube Parser"; } }
+			public override string Description { get { return "Passively waits for YouTube links, and, if one is found in a method, grabs video data and displays it."; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "YTDUMMYTRIGGER"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.RootOnly; } }
+			public override AccessPath AccessPath { get { return AccessPath.PMOnly; } }
+
+			private System.Text.RegularExpressions.Regex YouTubeRegEx = new System.Text.RegularExpressions.Regex(@"(?:youtube.com.*v=([\S]{11})|youtu.be/([\S]{11}))");
+			private char FullStar = '\u2605';
+			//private char EmptyStar = '\u2606';
+
+			public override async void MessageLoopMethod(Message m) {
+				System.Text.RegularExpressions.Match YTMatch = YouTubeRegEx.Match(m.Body);
+				if (YTMatch.Success) {
+					string url = "http://youtube.com/get_video_info?video_id=" + YTMatch.Groups[1].Value;
+					string data;
+					using (System.Net.WebClient w = new System.Net.WebClient()) { data = await w.DownloadStringTaskAsync(url); }
+					Dictionary<string, string> YTData = new Dictionary<string, string>();
+					YTData = data.Split('&').Select(n => n.Split('=')).ToDictionary(n => System.Web.HttpUtility.UrlDecode(n[0]), n => System.Web.HttpUtility.UrlDecode(n[1]));
+					TimeSpan ytDuration = TimeSpan.FromSeconds(double.Parse(YTData["length_seconds"]));
+					int Rating = (int)Math.Round(double.Parse(YTData["avg_rating"], Core.nfi), 2);
+                    m.Reply(string.Format("[color=Red]You[/color][color=white]Tube[/color] - [color=green]{0} ({1}) :: {2} :: {3}[/color]", YTData["title"], YTData["author"], ytDuration, new string(FullStar, Rating)));
+                }
+			}
+
+			public override void ShutdownMethod() { }
+			public override void SetupMethod() { 
+				FListProcessor.ChatMessage += MessageLoopMethod;
+				Core.SystemLog.Log("Registered Loop Method of Plugin '" + Name + "...");
+			}
+			public override IHost Host { get { return Core.pluginHost; } }
+			public override void PluginMethod(Message m) { }
+
+		}// plugin YouTube
 
 		sealed class DEFAULT : CogitoPlugin {
 			public override string Name { get { return ""; } }
@@ -481,9 +539,9 @@ namespace CogitoMini {
 			public override AccessLevel AccessLevel { get { return AccessLevel.Everyone; } }
 			public override AccessPath AccessPath { get { return AccessPath.All; } }
 
-			public override void MessageLoopMethod(Message m) { return; }
-			public override void ShutdownMethod() { return; }
-			public override void SetupMethod() { return; }
+			public override void MessageLoopMethod(Message m) { }
+			public override void ShutdownMethod() { }
+			public override void SetupMethod() { }
 
 			public override IHost Host { get { return Core.pluginHost; } }
 
