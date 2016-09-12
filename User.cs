@@ -103,7 +103,7 @@ namespace CogitoMini {
 		public void Message(string message, string Opcode = "PRI") {
 			IO.Message m = new IO.Message();
 			m.sourceUser = this;
-			m.Data["message"] = message;
+			m.Body = message;
 			m.Send();
 		}
 
@@ -168,6 +168,9 @@ namespace CogitoMini {
 			if (c.Mods.Contains(this)) { return true; }
 			return false;
 		}
+
+		internal void Log(string s, bool suppressPrint = false) { userLog.Log(s, suppressPrint); }
+		internal void Log(IO.Message m, bool suppressPrint = false) { userLog.Log(m, suppressPrint); }
 
 		/// <summary>
 		/// Gets basic character info (Name, Age, Gender, Height, Orientation) but no Kinks or Art.
@@ -242,7 +245,7 @@ namespace CogitoMini {
 				userLog = new IO.Logging.LogFile(Name, subdirectory: Name, timestamped: true);
 				Core.ActiveUserLogs.Add(userLog);
 			}
-			userLog.Log(m);
+			Log(m);
 		}
 
 		public virtual void Dispose() {

@@ -110,27 +110,40 @@ namespace CogitoMini.IO {
 		/// Sends the message by adding it to the OutgoingMessageQueue
 		/// </summary>
 		internal new void Send(){
+			User oldSource = null;
 			if (sourceUser == null && sourceChannel == null) { throw new ArgumentNullException("Attempted to send a chat message with no user or channel specified"); }
 			if (OpCode == null) { OpCode = sourceUser == null ? "MSG" : "PRI"; } //sets Opcode to MSG (send to entire channel) if no user is specified, else to PRI (only to user)
-			if (sourceUser != null) { Recipient = sourceUser.Name; }
+			if (sourceUser != null) { Recipient = sourceUser.Name; oldSource = sourceUser; }
 			if (sourceChannel != null) { Channel = sourceChannel.Key; }
-
 			//This should, in theory, make sure we don't send any too-long messages.
-			//y u no autosplit your buffer
 			int MessageLength = System.Text.Encoding.UTF8.GetByteCount(Body);
 			int MaxLength = OpCode == "MSG" ? Message.chat_max : Message.priv_max;
 			if (MessageLength > MaxLength) {
 				List<Message> messages = new List<Message>();
-				Message subMessage = new Message("", this);
 				messages.Add(this);
 				for (int i = 0; MessageLength > MaxLength; i++){
+					Message subMessage = new Message("", this);
 					subMessage.Body.Insert(subMessage.Body.Length, Body[Body.Length - i].ToString());
 					Body = Body.Substring(0, Body.Length - 1);
 					MessageLength = System.Text.Encoding.UTF8.GetByteCount(Body);
+					subMessage.sourceUser = Core.OwnUser; //hack
 					messages.Add(subMessage);
 				}
 				messages.ForEach(x => x.Send()); //If we did this recursively, the last subMessage would send first,[ chunks | to reversed  | leading ]
 				messages = null;
+			}
+			sourceUser = Core.OwnUser; //hack
+			switch (OpCode) {
+				case "PRI":
+					oldSource.Log(this);
+                    break;
+
+				case "MSG":
+					sourceChannel.Log(this);
+					break;
+
+				default:
+					break;
 			}
 			base.Send();
 		}

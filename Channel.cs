@@ -179,8 +179,8 @@ namespace CogitoMini {
 
 		}
 
-		public void Log(string s) { ChannelLog.Log(s); }
-		public void Log(string s, bool suppressPrint) { ChannelLog.Log(s, suppressPrint); }
+		public void Log(string s, bool suppressPrint = false) { ChannelLog.Log(s, suppressPrint); }
+		public void Log(IO.Message m, bool suppressPrint = false) { ChannelLog.Log(m, suppressPrint); }
 
 		public void Kick(User u) { u.Kick(this); }
 		public void Ban(User u) { u.Ban(this); }

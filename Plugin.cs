@@ -90,6 +90,7 @@ namespace CogitoMini {
 			AddInternalPlugin<Ignore>();
 			AddInternalPlugin<ListChannels>();
 			AddInternalPlugin<Minage>();
+			AddInternalPlugin<ModQueue>();
 			AddInternalPlugin<RainbowText>();
 			AddInternalPlugin<Remote>();
 			AddInternalPlugin<Scan>();
@@ -365,6 +366,7 @@ namespace CogitoMini {
 				if ((modeRaw ? 1 : 0) + (modeSay ? 1 : 0) + (modeAct ? 1 : 0) + (modePrivate ? 1 : 0) > 1) { m.Reply("One mode only, please!", ReplyMode.ForcePM); return; }
 				if (modePrivate) { 
 					Message m2 = new Message(m);
+					m2.Recipient = m.args[0];
 					m2.args = m.args.Skip(1).ToArray();
 					m2.OpCode = "PRI";
 					m2.Send();
@@ -553,6 +555,23 @@ namespace CogitoMini {
 				m.sourceUser.Ignore = !m.sourceUser.Ignore;
 				m.Reply(string.Format("Command received. You are now {0} ignored and {1} be receiving notifications for any channels you moderate and we survey.\nThank you for using Cogito. We are always watching.", m.sourceUser.Ignore ? "being" : "no longer being", m.sourceUser.Ignore ? "won't" : "will"));
 			}
+
+		}// plugin Ignore
+
+		sealed class ModQueue : CogitoPlugin {
+			public override string Name { get { return "Incident Reports"; } }
+			public override string Description { get { return "On request, returns all relevant incidents to the moderator in question"; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "modQueue"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.Everyone; } }
+			public override AccessPath AccessPath { get { return AccessPath.PMOnly; } }
+
+			public override void MessageLoopMethod(Message m) { }
+			public override void ShutdownMethod() { }
+			public override void SetupMethod() { }
+
+			public override IHost Host { get { return Core.pluginHost; } }
+
+			public override void PluginMethod(Message m) { FListProcessor.ProcessModMessageQueue(m.sourceUser); }
 
 		}// plugin DEFAULT
 
