@@ -100,13 +100,6 @@ namespace CogitoMini {
 
 		public override string ToString() { return Name; }
 
-		public override bool Equals(object obj) {
-			if (obj == null) { return false; }
-			User o = obj as User;
-			if (Name == o.Name) { return true; }
-			else { return false; }
-		}
-
 		public void Message(string message, string Opcode = "PRI") {
 			IO.Message m = new IO.Message();
 			m.sourceUser = this;
@@ -118,6 +111,13 @@ namespace CogitoMini {
 
 		public bool Equals(User user) {
 			if (_Name == user._Name) { return true; }
+			else { return false; }
+		}
+
+		public override bool Equals(object obj) {
+			if (obj == null) { return false; }
+			User o = obj as User;
+			if (_Name == o._Name) { return true; }
 			else { return false; }
 		}
 
@@ -147,7 +147,6 @@ namespace CogitoMini {
 				s.Send();
 			}
 		}
-
 
 		internal void Timeout(Channel c, int duration) {
 			if (Core.OwnUser.IsChannelOp(c)) {
@@ -239,7 +238,7 @@ namespace CogitoMini {
 		}
 
 		internal void MessageReceived(IO.Message m) {
-			if (userLog == null) {
+			if (userLog == null) { 
 				userLog = new IO.Logging.LogFile(Name, subdirectory: Name, timestamped: true);
 				Core.ActiveUserLogs.Add(userLog);
 			}

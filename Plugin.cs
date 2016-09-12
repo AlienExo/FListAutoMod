@@ -87,6 +87,7 @@ namespace CogitoMini {
 			}
 			AddInternalPlugin<Admin>();
 			AddInternalPlugin<Horoscopes>();
+			AddInternalPlugin<Ignore>();
 			AddInternalPlugin<ListChannels>();
 			AddInternalPlugin<Minage>();
 			AddInternalPlugin<RainbowText>();
@@ -516,9 +517,12 @@ namespace CogitoMini {
 					using (System.Net.WebClient w = new System.Net.WebClient()) { data = await w.DownloadStringTaskAsync(url); }
 					Dictionary<string, string> YTData = new Dictionary<string, string>();
 					YTData = data.Split('&').Select(n => n.Split('=')).ToDictionary(n => System.Web.HttpUtility.UrlDecode(n[0]), n => System.Web.HttpUtility.UrlDecode(n[1]));
-					TimeSpan ytDuration = TimeSpan.FromSeconds(double.Parse(YTData["length_seconds"]));
-					int Rating = (int)Math.Round(double.Parse(YTData["avg_rating"], Core.nfi), 2);
-                    m.Reply(string.Format("[color=Red]You[/color][color=white]Tube[/color] - [color=green]{0} ({1}) :: {2} :: {3}[/color]", YTData["title"], YTData["author"], ytDuration, new string(FullStar, Rating)));
+					try {
+						TimeSpan ytDuration = TimeSpan.FromSeconds(double.Parse(YTData["length_seconds"]));
+						int Rating = (int)Math.Round(double.Parse(YTData["avg_rating"], Core.nfi), 2);
+						m.Reply(string.Format("[color=Red]You[/color][color=white]Tube[/color] - [color=green]{0} ({1}) :: {2} :: {3}[/color]", YTData["title"], YTData["author"], ytDuration, new string(FullStar, Rating)));
+					}
+					catch { }
                 }
 			}
 
@@ -531,6 +535,26 @@ namespace CogitoMini {
 			public override void PluginMethod(Message m) { }
 
 		}// plugin YouTube
+
+		sealed class Ignore : CogitoPlugin {
+			public override string Name { get { return "Opt-out"; } }
+			public override string Description { get { return "Allows channel moderators to opt out of receiving Cogito notifications."; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "ignoreme"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.ChannelOps; } }
+			public override AccessPath AccessPath { get { return AccessPath.PMOnly; } }
+
+			public override void MessageLoopMethod(Message m) { }
+			public override void ShutdownMethod() { }
+			public override void SetupMethod() { }
+
+			public override IHost Host { get { return Core.pluginHost; } }
+
+			public override void PluginMethod(Message m) {
+				m.sourceUser.Ignore = !m.sourceUser.Ignore;
+				m.Reply(string.Format("Command received. You are now {0} ignored and {1} be receiving notifications for any channels you moderate and we survey.\nThank you for using Cogito. We are always watching.", m.sourceUser.Ignore ? "being" : "no longer being", m.sourceUser.Ignore ? "won't" : "will"));
+			}
+
+		}// plugin DEFAULT
 
 		sealed class DEFAULT : CogitoPlugin {
 			public override string Name { get { return ""; } }

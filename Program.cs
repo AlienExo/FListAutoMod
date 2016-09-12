@@ -84,16 +84,8 @@ using CogitoMini.IO;
 
 namespace CogitoMini
 {
-	/// <summary>Implemented for proper JSON serialization.</summary>
-	public interface ILoginKey{
-		/// <summary> Error message, if authentication failed</summary>
-		string error { get; set; }
-		/// <summary> The string which allows access to the fserv systems; returned on successful authentication with account and password</summary>
-		string ticket { get; set; }
-	}
-
 	/// <summary> Collection of all values and variables needed to establish a connection to an fchat server </summary>
-	public class LoginKey : ILoginKey{
+	public class LoginKey {
 		/// <summary>Server-side account number</summary>
 		public int account_id { get; set; }
 		/// <summary>character set as default on the server</summary>
@@ -108,7 +100,6 @@ namespace CogitoMini
 		public List<Dictionary<string, string>> friends { get; set; }
 		/// <summary>The API Ticket used to access the system</summary>
 		public string ticket { get; set; }
-
 		/// <summary> The DateTime when this ticket was obtained; used to avoid </summary>
 		public DateTime ticketTaken = DateTime.UtcNow;
 	}
@@ -396,15 +387,17 @@ namespace CogitoMini
 			websocket = new WebSocket(string.Format("ws://{0}:{1}", XMLConfig["server"], XMLConfig["port"]));
 			websocket.MessageReceived += Core.OnWebsocketMessage;
 			websocket.Error += new EventHandler<SuperSocket.ClientEngine.ErrorEventArgs>(Core.OnWebsocketError);
-			Core.websocket.Open();
+			websocket.Open();
 			Account.login(XMLConfig["account"], XMLConfig["password"]);
 
 			_quitEvent.WaitOne(); //keep websockets open and blocks thread until tripped
 
-			Core.SystemLog.Log("Saving channel and user data to hard drive...");
+			SystemLog.Log("Saving channel and user data to hard drive...");
 			if (websocket.State == WebSocketState.Open) { Core.websocket.Close(); }
 			while (IncomingMessageQueue.Count > 0) { try { ProcessCommandFromQueue(new object()); } catch (Exception e) { ErrorLog.Log("Exception in command processing during shutdown: " + e.Message); } }
+			
 			SaveAllSettingsBinary();
+			
 			foreach (Channel c in joinedChannels) { c.Dispose(); }
 			foreach (Logging.LogFile l in ActiveUserLogs) { l.Dispose(); } //flushes and writes all extant user logs.
 			SystemLog.Log("Shutting down.");
@@ -482,16 +475,16 @@ namespace CogitoMini
 		internal static void SaveAllSettingsBinary(string ContainingFolder = null, string Extension = ".dat") {
 			ContainingFolder = ContainingFolder ?? Config.AppSettings.DataPath;
 			BinaryFormatter bf = new BinaryFormatter();
-			//try {
-			//	using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.UserDBFileName + Extension))) {
-			//		bf.Serialize(fs, allGlobalUsers);
-			//		fs.Flush();
-			//	}
-			//}
-			//catch (Exception e) {
-			//	SystemLog.Log("WARNING: Failed to save binary user data to drive: " + e.Message);
-			//	ErrorLog.Log("WARNING: Failed to save user binary data to drive: " + e.Message);
-			//}
+			try {
+				using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.UserDBFileName + Extension))) {
+					bf.Serialize(fs, allGlobalUsers);
+					fs.Flush();
+				}
+			}
+			catch (Exception e) {
+				SystemLog.Log("WARNING: Failed to save binary user data to drive: " + e.Message);
+				ErrorLog.Log("WARNING: Failed to save user binary data to drive: " + e.Message);
+			}
 
 			try {
 				using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.ChannelDBFileName + Extension))) {

@@ -177,6 +177,7 @@ namespace CogitoMini.IO {
 			private StreamWriter logger = null;
 			private bool disposed = false;
 			private bool timestamped = false;
+			private object LogLock = new object();
 			
 			public void Log(string s, bool suppressPrint = false){
 				if (logFileStream == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
@@ -205,23 +206,24 @@ namespace CogitoMini.IO {
 			private void ReSetup() {
 				string FilePath;
 				FilePath = subdirectory.Length > 0 ? Path.Combine(Config.AppSettings.LoggingPath, subdirectory) : Config.AppSettings.LoggingPath;
-				if (!Directory.Exists(FilePath)) {
-					try {
-						Directory.CreateDirectory(FilePath);
+					if (!Directory.Exists(FilePath)) {
+						try {
+							Directory.CreateDirectory(FilePath);
+						}
+						catch (Exception e) {
+							Console.WriteLine(e.InnerException + "\n\tGetting Temp Path for log file instead...");
+							FilePath = Path.GetTempPath();
+						}
 					}
-					catch (Exception e) {
-						Console.WriteLine(e.InnerException + "\n\tGetting Temp Path for log file instead...");
-						FilePath = Path.GetTempPath();
-					}
+					FilePath = timestamped ? Path.Combine(FilePath, DateTime.Today.ToString("yyyy_MM_dd") + "_" + rootFilename + extension) : Path.Combine(FilePath, rootFilename + extension);
+				lock (LogLock) {
+					logFileStream = File.Open(FilePath, FileMode.Append, FileAccess.Write);
+					logger = new StreamWriter(logFileStream);
+					flushTimer.Interval = writeInterval;
+					flushTimer.Elapsed += flushTimer_Elapsed;
+					flushTimer.AutoReset = true;
+					flushTimer.Start();
 				}
-				FilePath = timestamped ? Path.Combine(FilePath, DateTime.Today.ToString("yyyy_MM_dd") + "_" + rootFilename + extension) : Path.Combine(FilePath, rootFilename + extension);
-
-				logFileStream = File.Open(FilePath, FileMode.Append, FileAccess.Write);
-				logger = new StreamWriter(logFileStream);
-				flushTimer.Interval = writeInterval;
-				flushTimer.Elapsed += flushTimer_Elapsed;
-				flushTimer.AutoReset = true;
-				flushTimer.Start();
 			}
 
 			/// <summary>

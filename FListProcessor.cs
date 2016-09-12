@@ -115,7 +115,10 @@ namespace CogitoMini
 		/// <summary> Gives a list of channel ops. Sent in response to JCH.
 		/// Received: COL { "channel": string, "oplist": [string] }
 		/// Send  As: COL { "channel": string }</summary>
-		internal static void COL(SystemCommand C) { 
+		internal static void COL(SystemCommand C) {
+			#if DEBUG	
+			Console.WriteLine("Modlist for '" + C.sourceChannel.Name + "': " + C.Data["oplist"]);
+			#endif
 			foreach (string s in (JArray)C.Data["oplist"]) {
 				User u = Core.getUser(s);
 				u.isMod = true;
@@ -455,6 +458,7 @@ namespace CogitoMini
 			string TargetMethod = m.args[0];
 			
 			if (m.sourceChannel != null) {
+				//if (m.sourceChannel.Mods.Select(n => n._Name).Contains(m.sourceUser._Name)) { m.AccessLevel++; }
 				if (m.sourceChannel.Mods.Contains(m.sourceUser)) { m.AccessLevel++; }
 				accesspath = AccessPath.ChannelOnly;
 			}
