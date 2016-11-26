@@ -93,7 +93,7 @@ namespace CogitoMini {
 			Name = nName.Trim('\t', '\r', '\n', ' ');
 			//_Name = nName.ToLowerInvariant();
 			Age = -1;
-			Core.allGlobalUsers.Add(this);
+			Core.allGlobalUsers.Add(this); //HACK disable w/o problems for perofrmance?
 		}
 
 		public User(string nName, int nAge) : this(nName) { Age = nAge; }
@@ -176,7 +176,8 @@ namespace CogitoMini {
 		/// <summary>
 		/// Gets basic character info (Name, Age, Gender, Height, Orientation) but no Kinks or Art.
 		/// </summary>
-		public async Task GetBasicProfileInfo(bool useAPIv2 = false) { //TODO This function doesn't run async. Why?
+		public async Task GetBasicProfileInfo(bool useAPIv2 = false) { //TODO /!\ This function doesn't run async. Why?
+			Console.WriteLine("Entered GetBasicProfileInfo async...");
 			string targetAPI = useAPIv2 ? Config.URLConstants.V2.CharacterInfo : Config.URLConstants.V1.CharacterInfo;
 			Dictionary<string, string> ProfileData = new Dictionary<string, string>();
 			FListAPI.CharacterResponseBase DataDigest = new FListAPI.CharacterResponseBase();
@@ -254,6 +255,7 @@ namespace CogitoMini {
 				if (userLog != null) {
 					userLog.Dispose();
 					Core.ActiveUserLogs.Remove(userLog);
+					Core.allGlobalUsers.TryRemove(this);
 				}
 			}
 			disposed = true;

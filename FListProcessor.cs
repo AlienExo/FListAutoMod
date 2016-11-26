@@ -79,7 +79,6 @@ namespace CogitoMini
                 }
 			}
 			catch (Exception e) { Core.ErrorLog.Log(String.Format("Error whilst parsing channel list: {0}\n\t{1} - {2}", e.Message, e.StackTrace, e.Data)); }
-            //TODO Entry point for all auto-joins, now that we know the channels
             new IO.SystemCommand("ORS").Send();            
 		}
 
@@ -195,11 +194,13 @@ namespace CogitoMini
 			C.sourceUser.Status = Status.offline;
 			IEnumerable<Channel> cs = Core.joinedChannels.Where(x => x.Users.Contains(C.sourceUser));
 			string byeString = C.sourceUser.Name + " has disconnected from the server";
+			C.sourceUser.Status = Status.offline;
             foreach (Channel c in cs) {
 				if (c.Mods.Contains(C.sourceUser)) { c.ChannelModLog.Log(byeString, true); }
 				c.Log(byeString);
+				c.Users.Remove(C.sourceUser); // <- seriously, you forgot this??
 			}
-			Core.allGlobalUsers.Remove(C.sourceUser);	
+			Core.allGlobalUsers.TryRemove(C.sourceUser);	
 		}
 
 		/// <summary> Initial friends list.
@@ -443,7 +444,6 @@ namespace CogitoMini
 		//chat_max: Maximum number of bytes allowed with MSG.	
 		/// <summary> Variables the server sends to inform the client about server variables.</summary>
 		internal static void VAR(SystemCommand C) {
-			//TODO: check format
 			switch ((string)C.Data["variable"]) {
 				case "msg_flood":
 				case "chat_flood":

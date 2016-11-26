@@ -110,10 +110,10 @@ namespace CogitoMini.IO {
 		/// Sends the message by adding it to the OutgoingMessageQueue
 		/// </summary>
 		internal new void Send(){
-			User oldSource = null;
+			//User oldSource = sourceUser;
 			if (sourceUser == null && sourceChannel == null) { throw new ArgumentNullException("Attempted to send a chat message with no user or channel specified"); }
 			if (OpCode == null) { OpCode = sourceUser == null ? "MSG" : "PRI"; } //sets Opcode to MSG (send to entire channel) if no user is specified, else to PRI (only to user)
-			if (sourceUser != null) { Recipient = sourceUser.Name; oldSource = sourceUser; }
+			if (sourceUser != null) { Recipient = sourceUser.Name;  }
 			if (sourceChannel != null) { Channel = sourceChannel.Key; }
 			//This should, in theory, make sure we don't send any too-long messages.
 			int MessageLength = System.Text.Encoding.UTF8.GetByteCount(Body);
@@ -126,25 +126,28 @@ namespace CogitoMini.IO {
 					subMessage.Body.Insert(subMessage.Body.Length, Body[Body.Length - i].ToString());
 					Body = Body.Substring(0, Body.Length - 1);
 					MessageLength = System.Text.Encoding.UTF8.GetByteCount(Body);
-					subMessage.sourceUser = Core.OwnUser; //hack
+					//subMessage.sourceUser = Core.OwnUser; //hack
 					messages.Add(subMessage);
 				}
 				messages.ForEach(x => x.Send()); //If we did this recursively, the last subMessage would send first,[ chunks | to reversed  | leading ]
 				messages = null;
 			}
-			sourceUser = Core.OwnUser; //hack
-			switch (OpCode) {
-				case "PRI":
-					oldSource.Log(this);
-                    break;
+			//sourceUser = Core.OwnUser; //hack
+			try {
+				switch (OpCode) {
+					case "PRI":
+						sourceUser.Log(this);
+						break;
 
-				case "MSG":
-					sourceChannel.Log(this);
-					break;
+					case "MSG":
+						sourceChannel.Log(this);
+						break;
 
-				default:
-					break;
+					default:
+						break;
+				}
 			}
+			catch (Exception e) { Core.ErrorLog.Log(string.Format("Error whilst trying to log outgoing message: {0}\n\t{1}\n\t{2}", e.InnerException, e.StackTrace, e.Message)); }
 			base.Send();
 		}
 
@@ -182,7 +185,7 @@ namespace CogitoMini.IO {
 
 	internal class Logging{
 		internal class LogFile : IDisposable{
-			private System.Timers.Timer flushTimer = new System.Timers.Timer();
+			private Timer flushTimer = new Timer();
 			private string rootFilename, extension, subdirectory;
 			private long writeInterval;
 			private DateTime creationDate = new DateTime();
@@ -190,18 +193,20 @@ namespace CogitoMini.IO {
 			private StreamWriter logger = null;
 			private bool disposed = false;
 			private bool timestamped = false;
-			private object LogLock = new object();
+			private object LogLock;
 			
 			public void Log(string s, bool suppressPrint = false){
-				if (logFileStream == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
+				if (s == null) { Core.ErrorLog.Log("Error: string is null when attempting to log"); return; }
+				if (logFileStream == null || logger == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
 				s = string.Format("<{0}> -- {1}{2}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), s, Environment.NewLine);
 				if (!suppressPrint) { Console.Write(s); }
 				logger.Write(s);
 			}
 
 			public void Log(IO.Message m, bool suppressPrint = false) {
-				if (m==null) { return; }
-				if (logFileStream == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
+				//TODO find the elusive NullReferenceException
+				if (m==null) { Core.ErrorLog.Log("Error: Message is null when attempting to log"); return; }
+				if (logFileStream == null || logger == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
 				string chanStr = m.OpCode == "PRI" ? "[PM]" : "(" + m.sourceChannel.Name + ") [" + m.Data["channel"] + "]";
 				string s = string.Format("<{0}> -- {1} {2}{3}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), chanStr, m.ToString(), Environment.NewLine);
 				if (!suppressPrint) { Console.Write(s); }
@@ -231,7 +236,7 @@ namespace CogitoMini.IO {
 					}
 					FilePath = timestamped ? Path.Combine(FilePath, DateTime.Today.ToString("yyyy_MM_dd") + "_" + rootFilename + extension) : Path.Combine(FilePath, rootFilename + extension);
 				lock (LogLock) {
-					logFileStream = File.Open(FilePath, FileMode.Append, FileAccess.Write);
+					logFileStream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
 					logger = new StreamWriter(logFileStream);
 					flushTimer.Interval = writeInterval;
 					flushTimer.Elapsed += flushTimer_Elapsed;
@@ -255,7 +260,8 @@ namespace CogitoMini.IO {
 				this.writeInterval = writeInterval;
 				this.timestamped = timestamped;
 				this.subdirectory = subdirectory;
-			}
+				LogLock = new object();
+            }
 
 			void flushTimer_Elapsed(object sender, ElapsedEventArgs e){
 				logger.Flush();

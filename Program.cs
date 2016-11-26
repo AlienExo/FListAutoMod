@@ -30,54 +30,18 @@ using CogitoMini.IO;
 
 /*	--- TODO  ---
  * 
- * [----------] Connect to server 
- * [----------] Join channel 
- * [----------] Parse age of incoming users 
- * [----------] Kick those below certain age 
- * [----------] Alert Mod(s) for non-parseable ppl
- * [----------] Ignore list for mods who don't like robots
- * [----------] Queue for undeliverable mesasges plus timing since last mod left
+ * [||||||||||] Connect to server 
+ * [||||||||||] Join channel 
+ * [||||||||||] Parse age of incoming users 
+ * [||||||||||] Kick those below certain age 
+ * [||||||||||] Alert Mod(s) for non-parseable ppl
+ * [||||||||||] Ignore list for mods who don't like robots
+ * [||||||||||] Queue for undeliverable mesasges plus timing since last mod left
  * [----------] Expand to gender
  * [----------] Expand to arbitrary profile marks
- * [----------] Save and retain configuration outside of core code
+ * [||||||||||] Save and retain configuration outside of core code
  * [----------] Timeouts for banned words
- * [----------] IgnoreList for 
- * [----------] Join channel 
- * [||||||||||]
  *
- *	".shutdown":
- *	".join":	
- *	".leave":	
- *	".lockdown":,
- *	".pt":		
- *	".sn":		
- *	".dbg":		
- *			
- *	".act":		
- *	".noage":	
- *	".underage":
- *	".ban":		
- *	".black":	
- *	".deop":	
- *	".kick":	
- *	".lj":		
- *	".minage":	
- *	".op":		
- *	".r":		
- *	".say":		
- *	".scan":	
- *	".white":	
- *	".ignore":	
- *			
- *	".auth":	
- *	".bingo":	
- *	".lc":		
- *	".help":	
- *	".tell":	 
- *
-
-
-
  * consider a delegate for messageScan-type plugins who then subscribe to it (+= on plugin load)
 
 */
@@ -405,12 +369,11 @@ namespace CogitoMini
 
 		internal static void ProcessCommandFromQueue(object stateobject) {
 			if ((DateTime.Now - LastPurge) > Config.AppSettings.DataPurgeAndBackupPeriod) {
-				int oldCount = allGlobalUsers.Count();
-				allGlobalUsers.Where(x => ((x.hasData && (DateTime.Now - x.dataTakenOn < Config.AppSettings.userProfileRefreshPeriod)) || x.Ignore) == false).Select(y => allGlobalUsers.Remove(y));
 				LastPurge = DateTime.Now;
-				SystemLog.Log(string.Format("Purged allGlobalUsers, {0} Users -> {1} Users", oldCount, allGlobalUsers.Count()));
 				SaveAllSettingsBinary();
+				SystemLog.Log("Settings and data autosaved.");
 			}
+
 			if (IncomingMessageQueue.Count > 0) {
 				SystemCommand C = IncomingMessageQueue.Dequeue();
 				try { Processor.GetType().GetMethod(C.OpCode, BindingFlags.NonPublic | BindingFlags.Static).Invoke(C, new object[] { C }); }
@@ -480,7 +443,8 @@ namespace CogitoMini
 			BinaryFormatter bf = new BinaryFormatter();
 			try {
 				using (Stream fs = File.Create(Path.Combine(ContainingFolder, Config.AppSettings.UserDBFileName + Extension))) {
-					bf.Serialize(fs, allGlobalUsers);
+					foreach (User u in allGlobalUsers) { if (!u.Ignore) { allGlobalUsers.TryRemove(u); }  }
+                    bf.Serialize(fs, allGlobalUsers);
 					fs.Flush();
 				}
 			}
@@ -515,8 +479,16 @@ namespace CogitoMini
 		}
 
 		internal static void OnWebsocketError(object sender, SuperSocket.ClientEngine.ErrorEventArgs e){
-			ErrorLog.Log(string.Format("Error in Websocket: " + e.Exception));
-		}
+			//TODO write this thing for:
+			//Error in Websocket: System.Net.Sockets.SocketException (0x80004005): A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond
+			ErrorLog.Log(string.Format("Error in Websocket: " + e.Exception.Message));
+			if(e.Exception.Message.Contains("A connection attempt failed because the connected party did not properly respond after a period of time")) {
+				websocket.Close();
+				Thread.Sleep(10000);
+				websocket.Open();
+				return;
+			}
+        }
 
 		internal static void OnWebsocketMessage(object sender, WebSocket4Net.MessageReceivedEventArgs e){
 			SystemCommand C = new SystemCommand(e.Message.ToString());

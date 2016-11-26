@@ -201,9 +201,10 @@ namespace CogitoMini {
 				Dictionary<string, string> data = new Dictionary<string, string>(dataPool.Count);
 				string results;
 
+				Console.WriteLine("Preparing to execute Task Pool...");
 				Task DataScan = Task.WhenAll(dataPool.Select(n => n.GetBasicProfileInfo()));
 				await DataScan;
-
+				Console.WriteLine("Awaited Task Pool.");
 				data = dataPool.ToDictionary(x => x.Name, x => x.TryGetData(m.Body));
 
 				if (modeStatistic) { //transform all to numeric
@@ -397,24 +398,26 @@ namespace CogitoMini {
 					Core.ErrorLog.Log("No channel attached to whitelist request: " + m.Body); 
 					return;
 				}
-				if (m.args.Length < 1) {
+				Core.SystemLog.Log(m.args.ToString(), true);
+				if (m.args.Length == 0) {
 					m.Reply("Current whitelist for Channel '" + m.sourceChannel.Name + "':\n" + string.Join(", ", m.sourceChannel.Whitelist).TrimEnd(','));
 					return;
 				}
 				string TargetUser = m.Body;
                 if (!m.sourceChannel.Users.Select(x => x.Name).Contains(TargetUser)) { 
-					m.Reply("'" + TargetUser + " is not currently a user of channel '" + m.sourceChannel.Name + "'. For security purposes, and to avoid misspelling issues, only users in the channel can be added to the whitelist.");
+					m.Reply("'" + TargetUser + "' is not currently a user of channel '" + m.sourceChannel.Name + "'. For security purposes, and to avoid misspelling issues, only users in the channel can be added to the whitelist.");
 					return; 
 				}
 				else {
 					m.sourceChannel.Whitelist.Add(TargetUser);
 					m.sourceChannel.ChannelModLog.Log(string.Format("Adding user '{0}' to channel whitelist by order of '{1}' ({2})", TargetUser, m.sourceUser.Name, m.AccessLevel));
 					m.Reply("User '" + TargetUser + "' successfully added to whitelist for channel '" + m.sourceChannel.Name + "'.");
+					Core.SaveAllSettingsBinary();
 				}
 			}
 		}// plugin Whitelist
 
-		sealed class ListChannels : CogitoPlugin { //TODO
+		sealed class ListChannels : CogitoPlugin {
 			public override string Name { get { return "Channel List"; } }
 			public override string Description { get { return "Returns the names and command indices of all currently joined channels"; } }
 			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "ls"); } }
@@ -449,7 +452,7 @@ namespace CogitoMini {
 
 		}// plugin ListChannel
 
-		sealed class Admin : CogitoPlugin { //TODO
+		sealed class Admin : CogitoPlugin {
 			public override string Name { get { return "Adminstration Tools"; } }
 			public override string Description { get { return "Allows execution of channel Op commands via Cogito"; } }
 			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "op"); } }
@@ -461,6 +464,8 @@ namespace CogitoMini {
 			public override void SetupMethod() { return; }
 
 			public override IHost Host { get { return Core.pluginHost; } }
+
+			public string[] sass = { "NERF DIS!", "JUSTICE RAINS FROM ABOVE!", "Dòng zhù! Bùxǔ zǒu!", "The target’s threat judgement has been reappraised. Enforcement mode: Lethal eliminator. Trigger safety released. Aim carefully and eliminate the target.", "Do you feel lucky, punk?" };
 
 			public override void PluginMethod(Message m) {
 				if (m.sourceChannel == null) { m.Reply("No source channel attached to command. Either use command from within a channel, or use the redirect operator '" + Config.AppSettings.RedirectOperator + "' plus a channel ID number starting at 0 (obtained using .ls) to select the correct channel."); return; }
@@ -553,6 +558,7 @@ namespace CogitoMini {
 
 			public override void PluginMethod(Message m) {
 				m.sourceUser.Ignore = !m.sourceUser.Ignore;
+				if (!Core.allGlobalUsers.Contains(m.sourceUser)) { Core.allGlobalUsers.Add(m.sourceUser); }
 				m.Reply(string.Format("Command received. You are now {0} ignored and {1} be receiving notifications for any channels you moderate and we survey.\nThank you for using Cogito. We are always watching.", m.sourceUser.Ignore ? "being" : "no longer being", m.sourceUser.Ignore ? "won't" : "will"));
 			}
 
@@ -573,7 +579,41 @@ namespace CogitoMini {
 
 			public override void PluginMethod(Message m) { FListProcessor.ProcessModMessageQueue(m.sourceUser); }
 
-		}// plugin DEFAULT
+		}// plugin ModQueue
+
+		sealed class Dictionary : CogitoPlugin {
+
+			internal struct AutoDictItem {
+				DateTime LastUsed;
+				string Key;
+				string Definition;
+			}
+
+			public override string Name { get { return "Auto-Dictionary"; } }
+			public override string Description { get { return "You keep using that word. I do not think it means what you think it means"; } }
+			public override string Trigger { get { return (Config.AppSettings.TriggerPrefix + "dict"); } }
+			public override AccessLevel AccessLevel { get { return AccessLevel.Everyone; } }
+			public override AccessPath AccessPath { get { return AccessPath.All; } }
+
+			internal AutoDictItem[] dictData;
+			 
+
+			public override void MessageLoopMethod(Message m) {
+				//TDOO timeout first (global) or per-word?
+				//TODO if any word in message is in dict, check if timeout still active, if  if () {  }
+			}
+			public override void ShutdownMethod() { }
+			public override void SetupMethod() {
+				
+				FListProcessor.ChatMessage += MessageLoopMethod;
+				Core.SystemLog.Log("Registered Loop Method of Plugin '" + Name + "...");
+			}
+
+			public override IHost Host { get { return Core.pluginHost; } }
+
+			public override void PluginMethod(Message m) { }
+
+		}// plugin Dictionary
 
 		sealed class DEFAULT : CogitoPlugin {
 			public override string Name { get { return ""; } }

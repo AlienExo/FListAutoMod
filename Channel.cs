@@ -186,20 +186,19 @@ namespace CogitoMini {
 		public void Ban(User u) { u.Ban(this); }
 
 		public void TryAlertMod(string subject, string message) {
-			List<User> modsToAlert = Mods.Where(n => (n.Ignore == false && (int)n.Status < 4)).Intersect(Users).ToList();
-			if (Core.OwnUser != null) { modsToAlert = modsToAlert.Where(n => n != Core.OwnUser).ToList(); }
-			if (modsToAlert.Count == 0) {
-				//ChannelModLog.Log("Could not find any mods to alert for incident '" + message + "'");
-				//Core.ModLog.Log("Could not find any mods to alert for incident '" + message + "'", true);
-				modMessageQueue.Enqueue(new Incident(subject, DateTime.Now, message));
-			}
+			List<User> modsToAlert = Mods.Where(n => (n.Ignore == false && n.Status < Status.busy)).Intersect(Users).ToList();
+			modsToAlert = modsToAlert.Where(n => n.Name != Core.XMLConfig["character"]).ToList();
+			#if DEBUG
+				Console.WriteLine(string.Format("Userlist: {0}.\nModlist: {1}.\nMods To Alert:\n{2}", Users.ToString(), Mods.ToString(), modsToAlert.ToString()));
+			#endif
+			if (modsToAlert.Count == 0) { modMessageQueue.Enqueue(new Incident(subject, DateTime.Now, message)); }
 			else {Utils.Math.RandomChoice(modsToAlert).Message(string.Format("This is an automated message.\n\t Subject: {0}\nChannel: {1}\n{2}", subject, Name, message)); }
 		}
 
 		public void Message(string message) {
 			IO.Message m = new IO.Message();
 			m.sourceChannel = this;
-			m.Reply(message, IO.ReplyMode.ForceChannel);
+			m.Send();
 		}
 
 		internal async void CheckAge(string Username) {
@@ -210,7 +209,7 @@ namespace CogitoMini {
 			if (u.Age <= 0 && underageResponse != UnderageReponse.Ignore) {
 				int ChannelInteger = Core.joinedChannels.Contains(this) ? Core.joinedChannels.IndexOf(this) : -1;
 				if (ChannelInteger == -1) { Core.ErrorLog.Log("Target Channel " + Name + " is not registered in Core.joinedChannels and should not be being monitored..."); return; }
-				TryAlertMod(Name, string.Format("Cannot parse age of User '{0}' joining channel '{1}' (minimum age set to {2}). Please verify.\n\tIn case of false positive, please respond with '.whitelist {3} {4} {5}'. Copy and paste the command from this message to avoid misspelling.", u.Name, Name, minAge, Name, Config.AppSettings.RedirectOperator, ChannelInteger));
+				TryAlertMod(Name, string.Format("Cannot parse age of User '{0}' joining channel '{1}' (minimum age set to {2}). Please verify.\n\tIn case of false positive, please respond with '.whitelist {3} {4} {5}'. Copy and paste the command from this message to avoid misspelling.", u.Name, Name, minAge, u.Name, Config.AppSettings.RedirectOperator, ChannelInteger));
 				if (u.Age == -1) { Core.ErrorLog.Log("Age check failed for user " + u.Name + "; check subroutine."); return; }
 				return;
 			}
