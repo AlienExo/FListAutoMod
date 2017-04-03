@@ -1,5 +1,4 @@
-bin/Debug/logs/
-obj/
-bin/AutoModv1-2.zip
 bin/
+obj/
 *.pfx
+chan1.txt

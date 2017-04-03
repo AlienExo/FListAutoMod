@@ -76,13 +76,14 @@ namespace CogitoMini.IO {
 		}
 
 		internal string Channel {
-			get { return Data["channel"].ToString(); }
+			get { try { return Data["channel"].ToString(); } catch { return null; } }
 			set { Data["channel"] = value; }
 		}
 
-		internal string Recipient {
-			get { return Data["recipient"].ToString(); }
-			set { Data["recipient"] = value; }
+		private User _recipient;
+		internal User Recipient {
+			get { return _recipient; }
+			set { Data["recipient"] = value.Name; _recipient = value; }
 		}
 
 		internal string[] args { 
@@ -110,14 +111,10 @@ namespace CogitoMini.IO {
 		/// Sends the message by adding it to the OutgoingMessageQueue
 		/// </summary>
 		internal new void Send(){
-			//User oldSource = sourceUser;
-			if (sourceUser == null && sourceChannel == null) { throw new ArgumentNullException("Attempted to send a chat message with no user or channel specified"); }
-			if (OpCode == null) { OpCode = sourceUser == null ? "MSG" : "PRI"; } //sets Opcode to MSG (send to entire channel) if no user is specified, else to PRI (only to user)
-			if (sourceUser != null) { Recipient = sourceUser.Name;  }
-			if (sourceChannel != null) { Channel = sourceChannel.Key; }
-			//This should, in theory, make sure we don't send any too-long messages.
+			if (Recipient == null && Channel == null) { throw new ArgumentNullException("Attempted to send a chat message with no recipient or channel specified"); }
+			if (OpCode == null) { OpCode = (Recipient == null) ? "MSG" : "PRI"; } //sets Opcode to MSG (send to entire channel) if no user is specified, else to PRI (only to user)
 			int MessageLength = System.Text.Encoding.UTF8.GetByteCount(Body);
-			int MaxLength = OpCode == "MSG" ? Message.chat_max : Message.priv_max;
+			int MaxLength = OpCode == "MSG" ? chat_max : priv_max;
 			if (MessageLength > MaxLength) {
 				List<Message> messages = new List<Message>();
 				messages.Add(this);
@@ -136,7 +133,7 @@ namespace CogitoMini.IO {
 			try {
 				switch (OpCode) {
 					case "PRI":
-						sourceUser.Log(this);
+						Recipient.Log(this);
 						break;
 
 					case "MSG":
@@ -172,13 +169,17 @@ namespace CogitoMini.IO {
 					reply.OpCode = "PRI";
 					break;
 			}
+			reply.Recipient = sourceUser;
+			reply.Channel = sourceChannel != null ? sourceChannel.Key : null;
+			reply.sourceUser = Core.OwnUser;
 			reply.Send();
 		}
 
 		public override string ToString(){
 			string _message;
+			//if (sourceUser == Recipient) { sourceUser = Core.OwnUser; } //HACK
 			if (Body.StartsWith("/me")) { _message = sourceUser.Name + Body.Substring(3); }
-			else {_message = sourceUser.Name + ": " + Body;}
+			else { _message = sourceUser.Name + ": " + Body; }
 			return _message;
 		}
 	} //class Message
@@ -204,9 +205,8 @@ namespace CogitoMini.IO {
 			}
 
 			public void Log(IO.Message m, bool suppressPrint = false) {
-				//TODO find the elusive NullReferenceException
 				if (m==null) { Core.ErrorLog.Log("Error: Message is null when attempting to log"); return; }
-				if (logFileStream == null || logger == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
+				if (logFileStream == null || logger == null || flushTimer == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
 				string chanStr = m.OpCode == "PRI" ? "[PM]" : "(" + m.sourceChannel.Name + ") [" + m.Data["channel"] + "]";
 				string s = string.Format("<{0}> -- {1} {2}{3}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), chanStr, m.ToString(), Environment.NewLine);
 				if (!suppressPrint) { Console.Write(s); }
@@ -216,9 +216,9 @@ namespace CogitoMini.IO {
 			/// <summary>
 			/// To be called when you've already processed the mesasge with a timestamp for the channel; just pass the message.ToString() result and it's logged 'raw'
 			/// </summary>
-			public void LogRaw(string s){
+			public void LogRaw(string s, bool suppressPrint = false){
 				if (logFileStream == null) { ReSetup(); } //effectively, file is set up on first write rather than on object creation
-				Console.Write(s);
+				if (!suppressPrint) { Console.Write(s); }
 				logger.Write(s);
 			}
 
@@ -273,7 +273,10 @@ namespace CogitoMini.IO {
 				}	
 			}
 
-			~LogFile(){ Dispose(true); }
+			~LogFile(){
+				if (logger != null) { logger.Close(); }
+				Dispose(true); 
+				}
 
 			//implement IDisposable
 			public void Dispose(){
@@ -285,11 +288,8 @@ namespace CogitoMini.IO {
 				if (!disposed)
 				{
 					if (disposing){
-						//logger.Flush(); //todo make sure logs are complete??
-						//logger.Dispose();
 						flushTimer.Stop();
 						flushTimer.Dispose();
-						// Free other state (managed objects).
 					}
 					disposed = true;
 				}

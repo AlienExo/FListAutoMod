@@ -42,7 +42,7 @@ namespace CogitoMini
 		}
 
 		internal static class AppSettings{
-			internal const string Version = "1.1.3.1";
+			internal const string Version = "1.2a";
             internal static readonly TimeSpan reconnectionStagger = new TimeSpan(0, 0, 10);
 			internal static readonly TimeSpan ticketLifetime = new TimeSpan(0, 29, 0);
 			internal static readonly TimeSpan userProfileRefreshPeriod = new TimeSpan(0, 1, 0, 0);

@@ -98,11 +98,15 @@ namespace CogitoMini {
 
 		public User(string nName, int nAge) : this(nName) { Age = nAge; }
 
+		//~User() {
+		//	if (userLog != null) {   } //call to dispose wouldn't work due to logger debacle...
+		//}
+
 		public override string ToString() { return Name; }
 
 		public void Message(string message, string Opcode = "PRI") {
 			IO.Message m = new IO.Message();
-			m.sourceUser = this;
+			m.Recipient = this;
 			m.OpCode = Opcode;
 			m.Body = message;
 			m.Send();
@@ -170,13 +174,18 @@ namespace CogitoMini {
 			return false;
 		}
 
-		internal void Log(string s, bool suppressPrint = false) { userLog.Log(s, suppressPrint); }
-		internal void Log(IO.Message m, bool suppressPrint = false) { userLog.Log(m, suppressPrint); }
+		internal void Log(string s, bool suppressPrint = false) {
+			if (userLog == null) { userLog = new IO.Logging.LogFile(Name, subdirectory: Name, timestamped: true); }
+			userLog.Log(s, suppressPrint); 
+		}
+		internal void Log(IO.Message m, bool suppressPrint = false) {
+			if (userLog == null) { userLog = new IO.Logging.LogFile(Name, subdirectory: Name, timestamped: true); }
+			userLog.Log(m, suppressPrint); }
 
 		/// <summary>
 		/// Gets basic character info (Name, Age, Gender, Height, Orientation) but no Kinks or Art.
 		/// </summary>
-		public async Task GetBasicProfileInfo(bool useAPIv2 = false) { //TODO /!\ This function doesn't run async. Why?
+		public async Task<bool> GetBasicProfileInfo(bool useAPIv2 = false) { //TODO /!\ This function doesn't run async. Why?
 			Console.WriteLine("Entered GetBasicProfileInfo async...");
 			string targetAPI = useAPIv2 ? Config.URLConstants.V2.CharacterInfo : Config.URLConstants.V1.CharacterInfo;
 			Dictionary<string, string> ProfileData = new Dictionary<string, string>();
@@ -239,6 +248,7 @@ namespace CogitoMini {
 				}
 				dataTakenOn = DateTime.Now; //sets the flag
 				hasData = true;
+				return true;
 			//}
 		}
 

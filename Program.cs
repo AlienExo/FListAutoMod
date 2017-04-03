@@ -503,7 +503,7 @@ namespace CogitoMini
 		public static User getUser(string username){
 			return allGlobalUsers.Count(x => x.Name == username) > 0 ? allGlobalUsers.First(n => n.Name == username) : new User(username);
 		}
-		
+
 		///// <summary> Overloaded in order to immediately return User instances, as may happen...?
 		///// </summary>
 		///// <param name="user">User instance.</param>
@@ -519,12 +519,17 @@ namespace CogitoMini
 		/// <summary>
 		/// Fetches the corresponding channel instance from the List of all channels registered in CogitoSharp.Core; creates a new one (adding it to the central register) if no match is found.
 		/// </summary>
-		/// <param name="channel"></param>
+		/// <param name="NameOrKey">The Channel Name (public channels) or Key (Private Channels) to look for.</param>
+		/// <param name="overrideName">If no match is found and thus a new channel created, an overrideName is specified to ensure the channel isn't treated as public, and gets the right name</param>
 		/// <returns>Channel Instance</returns>
-		public static Channel getChannel(string channel){
-			if (channels.Select(n => n.Key).Contains<string>(channel)) { return channels.First(o => o.Key == channel); }
+		public static Channel getChannel(string NameOrKey, string overrideName = null){
+			if (channels.Select(n => n.Key).Contains<string>(NameOrKey)) { return channels.First(o => o.Key == NameOrKey); }
 			else {
-				Channel c = new Channel(channel);
+				Channel c = new Channel(NameOrKey);
+                if (overrideName != null) { 
+					c.Name = overrideName;
+					c.Key = NameOrKey; 
+				}
 				return c;
 			}
 			//return Core.channels.Count(x => x.Key == channel) > 0 ? Core.channels.First<Channel>(n => n.Key == channel) : new Channel(channel);

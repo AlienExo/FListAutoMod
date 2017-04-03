@@ -86,7 +86,7 @@ namespace CogitoMini
 		/// Send  As: CIU { "channel": string, "character": string }
 		/// Received: CIU { "sender":string,"title":string,"name":string } </summary>
 		internal static void CIU(SystemCommand C) {
-			Channel ch = Core.getChannel(C.Data["title"].ToString());
+			Channel ch = Core.getChannel(C.Data["name"].ToString(), C.Data["title"].ToString());
 			Core.SystemLog.Log(String.Format("Joining channel '{0}' by invitation of user '{1}'", C.Data["title"].ToString(), C.Data["sender"].ToString()));
 			ch.Join();
 		}
@@ -133,7 +133,7 @@ namespace CogitoMini
 				StreamWriter fsw = new StreamWriter(fs);
 				DateTime Now = DateTime.Now;
 				fsw.Write(String.Format("{0}\t{1}\t{2}\t{3}\t{4}\tusers connected\r\n", Now.ToString("yyyy-MM-dd"), Now.ToString("HH:mm:ss"), Core.XMLConfig["server"], Core.XMLConfig["port"], C.Data["count"].ToString()));
-				fsw.Flush();
+				fsw.Close();
 			}
 		}
 
@@ -236,6 +236,7 @@ namespace CogitoMini
 		internal static void JCH(SystemCommand C) {
 			JObject JoinData = (JObject)C.Data["character"];
 			string us = JoinData["identity"].ToString();
+			C.sourceChannel = Core.getChannel(C.Data["channel"].ToString());
             C.sourceChannel.Users.Add(new User(us));
 			C.sourceChannel.Log(string.Format("User '{0}' joined Channel '{1}'", us, C.sourceChannel.Name));
 			if (us == Core.OwnUser.Name) {

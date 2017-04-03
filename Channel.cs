@@ -92,8 +92,12 @@ namespace CogitoMini {
 			JoinCmd.Data["channel"] = Key;
 			JoinCmd.Send();
 			isJoined = true;
+			InitializeChannelLogs();
+		}
+
+		internal void InitializeChannelLogs() {
 			if (ChannelLog == null) { ChannelLog = new IO.Logging.LogFile(Name, subdirectory: Name, timestamped: true); }
-			if (ChannelModLog == null) { ChannelModLog = new IO.Logging.LogFile(Name + "_Mods", subdirectory: Name, timestamped: true); }
+			if (ChannelModLog == null) { ChannelModLog = new IO.Logging.LogFile(Name + "_Mods", writeInterval: 1000, subdirectory: Name, timestamped: true); }
 		}
 
 		internal void Leave() {
@@ -130,11 +134,13 @@ namespace CogitoMini {
 		public Channel(string _key, string _name = "[Private Channel]") : this(_name) { Key = _key; } 
 
 		internal void MessageReceived(IO.Message m) {
+			InitializeChannelLogs();
 			ChannelLog.Log(m);
 			if (m.sourceUser.IsChannelOp(this)) { ChannelModLog.Log(m, true); }
 		}
 
 		internal void MessageReceived(string s) {
+			InitializeChannelLogs();
 			string _s = string.Format("<{0}> -- {1}{2}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), s, Environment.NewLine);
 			ChannelLog.LogRaw(_s);
 		}
@@ -189,7 +195,7 @@ namespace CogitoMini {
 			List<User> modsToAlert = Mods.Where(n => (n.Ignore == false && n.Status < Status.busy)).Intersect(Users).ToList();
 			modsToAlert = modsToAlert.Where(n => n.Name != Core.XMLConfig["character"]).ToList();
 			#if DEBUG
-				Console.WriteLine(string.Format("Userlist: {0}.\nModlist: {1}.\nMods To Alert:\n{2}", Users.ToString(), Mods.ToString(), modsToAlert.ToString()));
+				Console.WriteLine(string.Format("Userlist: {0}.\nModlist: {1}.\nMods To Alert:\n{2}", string.Join(", ", Users.Select(x => x.Name)), string.Join(", ", Mods.Select(x => x.Name)), string.Join(", ", modsToAlert.Select(n=>n.Name))));
 			#endif
 			if (modsToAlert.Count == 0) { modMessageQueue.Enqueue(new Incident(subject, DateTime.Now, message)); }
 			else {Utils.Math.RandomChoice(modsToAlert).Message(string.Format("This is an automated message.\n\t Subject: {0}\nChannel: {1}\n{2}", subject, Name, message)); }

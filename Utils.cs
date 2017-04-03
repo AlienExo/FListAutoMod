@@ -295,7 +295,7 @@ namespace CogitoMini.Utils
 	public static class RegularExpressions{
 		internal static Regex ProfileHTMLTags = new Regex(@"<span class=.*>(.*):</span>(.*)");
 		internal static Regex AgeSearch = new Regex(@"(\d{1,9})");
-		internal static Regex Numbers = new Regex(@"(\d{1,5}[.,]?\d{0,2})");
+		internal static Regex Numbers = new Regex(@"(\d{1,5}[\.,]?\d{0,2})");
 		internal static Regex Dates = new Regex("(?<day>\\d{1,2})(\\s)*(/|.|(st|nd|rd|th))?(\\s)*(?<month>(\\d{1,2}|\\w{3,9}))");
 	}
 
@@ -346,7 +346,7 @@ namespace CogitoMini.Utils
 		public class Counter<T> : IEnumerable<T> {
 			private SortedDictionary<T, int> _dict;
 
-			public Counter(IEnumerable<T> data) { data.Select(x => { Add(x); return x; }); }
+			public Counter(IEnumerable<T> data): this() { Add(data); }
 			public Counter() { _dict = new SortedDictionary<T, int>(); }
 
 			public bool Contains(T item) { return _dict.ContainsKey(item); }
@@ -393,10 +393,10 @@ namespace CogitoMini.Utils
 
 			public string ToString(int limit) {
 				IOrderedEnumerable<KeyValuePair<T, int>> data = _dict.OrderBy(n => n.Value);
-				return string.Join(", ", data.Take(limit).Select(n => "'" + n.Key + "': " + n.Value)).TrimEnd(new char[] { ',', ' ' }); 
+				return string.Join(", ", data.Take(limit).Select(n => n.Key + " (" + n.Value + ")")).TrimEnd(new char[] { ',', ' ' }); 
 			}
 
-			public string[] AsArray() { return _dict.Select(n => "'" + n.Key + "': " + n.Value).ToArray(); }
+			public string[] AsArray() { return _dict.Select(n => n.Key + " (" + n.Value + ")").ToArray(); }
 
 
 			public int Count { get { return _dict.Keys.Count;  } }
