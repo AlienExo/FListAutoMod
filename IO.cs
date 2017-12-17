@@ -86,7 +86,7 @@ namespace CogitoMini.IO {
 			set { Data["recipient"] = value.Name; _recipient = value; }
 		}
 
-		internal string[] args { 
+		internal string[] Args { 
 			get { return Body.Split(' '); } 
 			set	{ Body = string.Join(" ", value); }
 		}
@@ -148,7 +148,7 @@ namespace CogitoMini.IO {
 			base.Send();
 		}
 
-		internal int getByteLength(){ return (System.Text.Encoding.UTF8.GetByteCount(Body)); }
+		internal int GetByteLength(){ return (System.Text.Encoding.UTF8.GetByteCount(Body)); }
 
 		/// <summary>
 		/// Replies to the message by posting to the same user/channel where the Message originated
@@ -290,6 +290,8 @@ namespace CogitoMini.IO {
 					if (disposing){
 						flushTimer.Stop();
 						flushTimer.Dispose();
+						logFileStream.Dispose();
+						logger.Dispose();
 					}
 					disposed = true;
 				}

@@ -1,0 +1,22 @@
+ChannelRPG
+	Earn XP for each word in messages in a participating channel
+	Fight other players or random monster
+	Get Items from those encounters
+	
+Classes:
+	Fighter
+		Paladin	self regeneration; smite skills; healing hands, self weapon enchant
+		Barbarian	higher crit, berserk rage
+		Blademaster dual wield
+		
+	Mage
+		Archmage	target elemental weaknesses, spells level up
+		Necromancer	raise minions close to own level to fight with you
+		Alchemist	
+		-Goatmage-
+		
+	
+	Thief
+		Ninja	
+		Jester
+		

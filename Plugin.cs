@@ -46,7 +46,7 @@ namespace CogitoMini {
 	static class Plugins {
 		internal static Dictionary<string, CogitoPlugin> PluginStore = new Dictionary<string, CogitoPlugin>();
 
-		internal static void loadPlugins() {
+		internal static void LoadPlugins() {
 			List<string> dllFileNames = new List<string>();
 			if (Directory.Exists(Config.AppSettings.PluginsPath)) { dllFileNames.AddRange(Directory.GetFiles(Config.AppSettings.PluginsPath, "*.dll")); }
 			if (dllFileNames.Count > 0) {
@@ -114,21 +114,21 @@ namespace CogitoMini {
 
 			public override void PluginMethod(Message m) {
 				if (m.sourceChannel == null) { m.Reply("No source channel attached to command. Either use command from within a channel, or use the redirect operator '" + Config.AppSettings.RedirectOperator + "' plus a channel ID number starting at 0 (obtained using .ls) to select the correct channel."); return; }
-				bool modeKick = m.args.Contains("-k") ? true : false;
-				m.args = m.args.Where(n => n != "-k").ToArray();
-				bool modeBan = m.args.Contains("-b") ? true : false;
-				m.args = m.args.Where(n => n != "-b").ToArray();
-				bool modeTimeout = m.args.Contains("-t") ? true : false;
-				m.args = m.args.Where(n => n != "-t").ToArray();
-				bool modeSass = m.args.Contains("-s") ? true : false;
-				m.args = m.args.Where(n => n != "-s").ToArray();
+				bool modeKick = m.Args.Contains("-k") ? true : false;
+				m.Args = m.Args.Where(n => n != "-k").ToArray();
+				bool modeBan = m.Args.Contains("-b") ? true : false;
+				m.Args = m.Args.Where(n => n != "-b").ToArray();
+				bool modeTimeout = m.Args.Contains("-t") ? true : false;
+				m.Args = m.Args.Where(n => n != "-t").ToArray();
+				bool modeSass = m.Args.Contains("-s") ? true : false;
+				m.Args = m.Args.Where(n => n != "-s").ToArray();
 				//bool modeOp = m.args.Contains("-op") ? true : false;
 				//m.args = m.args.Where(n => n != "-op").ToArray();
 				//bool modeDeop = m.args.Contains("-deop") ? true : false;
 				//m.args = m.args.Where(n => n != "-deop").ToArray();
 				int timeoutLength = -1;
-				if (m.args.Length < 1) { m.Reply("Not enough arguments supplied. Need at least mode and target name."); return; }
-				if (modeTimeout && int.TryParse(m.args[0], out timeoutLength)) { m.args = m.args.Skip(1).ToArray(); }
+				if (m.Args.Length < 1) { m.Reply("Not enough arguments supplied. Need at least mode and target name."); return; }
+				if (modeTimeout && int.TryParse(m.Args[0], out timeoutLength)) { m.Args = m.Args.Skip(1).ToArray(); }
 				string TargetUser = m.Body, sassMessage = "";
 				if ((modeKick ? 1 : 0) + (modeBan ? 1 : 0) + (modeTimeout ? 1 : 0) > 1) { m.Reply("One mode only!", IO.ReplyMode.ForcePM); return; }
 				if (!m.sourceChannel.Users.Select(x => x.Name).Contains(TargetUser)) { m.Reply("Target '" + TargetUser + "' is not currently in channel '" + m.sourceChannel.Name + "'. Unable to comply."); return; }
@@ -188,7 +188,7 @@ namespace CogitoMini {
 			public override IHost Host { get { return Core.pluginHost; } }
 
 			public override void PluginMethod(Message m) {
-				bool toggleAutoDict = m.args.Contains("-a") ? true : false;
+				bool toggleAutoDict = m.Args.Contains("-a") ? true : false;
 				//m.args = m.args.Where(x => x != "-a").ToArray();
 				if (toggleAutoDict) {
 					doAutoDict = !doAutoDict;
@@ -292,11 +292,11 @@ namespace CogitoMini {
 
 			public override void PluginMethod(Message m) {
 
-				bool modeJoin = m.args.Contains("-j") ? true : false;
-				m.args = m.args.Where(n => n != "-j").ToArray();
+				bool modeJoin = m.Args.Contains("-j") ? true : false;
+				m.Args = m.Args.Where(n => n != "-j").ToArray();
 
-				bool modeLeave = m.args.Contains("-l") ? true : false;
-				m.args = m.args.Where(n => n != "-l").ToArray();
+				bool modeLeave = m.Args.Contains("-l") ? true : false;
+				m.Args = m.Args.Where(n => n != "-l").ToArray();
 
 				if (modeJoin && modeLeave) { m.Reply("One mode only, please!"); }
 
@@ -326,31 +326,30 @@ namespace CogitoMini {
 
 			public override void PluginMethod(Message m) {
 				if (m.sourceChannel != null) {
-					if (m.args.Contains("-r")) {
-						int optIndex = Array.IndexOf(m.args, "-r");
-						if (optIndex + 1 <= m.args.Length) {
+					if (m.Args.Contains("-r")) {
+						int optIndex = Array.IndexOf(m.Args, "-r");
+						if (optIndex + 1 <= m.Args.Length) {
 							UnderageReponse newResponse = new UnderageReponse();
-							if (Enum.TryParse<UnderageReponse>(m.args[optIndex + 1], out newResponse)) { m.sourceChannel.underageResponse = newResponse; }
+							if (Enum.TryParse<UnderageReponse>(m.Args[optIndex + 1], out newResponse)) { m.sourceChannel.underageResponse = newResponse; }
 						}
 					}
-					if (m.args.Contains("-a")) { 
-						short newMinAge, oldMinAge;
-						oldMinAge = m.sourceChannel.minAge;
-						int optIndex = Array.IndexOf(m.args, "-a");
-						if (short.TryParse(m.args[optIndex+1], out newMinAge)) {
+					if (m.Args.Contains("-a")) {
+						short oldMinAge = m.sourceChannel.minAge;
+						int optIndex = Array.IndexOf(m.Args, "-a");
+						if (short.TryParse(m.Args[optIndex+1], out short newMinAge)) {
 							m.sourceChannel.minAge = newMinAge;
 							string changeMsg = string.Format("Minimum age for '{0}' changed from '{1}' to '{2}' by '{3}' ({4}). Enforcement mode: {5}", m.sourceChannel, oldMinAge, newMinAge, m.sourceUser, m.AccessLevel, m.sourceChannel.underageResponse);
 							m.sourceChannel.ChannelModLog.Log(changeMsg);
 						}
-						else { m.Reply("Cannot parse '" + m.args[optIndex+1] + "' as number. Expected format: .minage <newMinAge> (-r Kick|Ignore|Warn|Alert)"); }
+						else { m.Reply("Cannot parse '" + m.Args[optIndex+1] + "' as number. Expected format: .minage <newMinAge> (-r Kick|Ignore|Warn|Alert)"); }
 					}
-					if (m.args.Contains("-t")) { m.sourceChannel.TryAlertMod("Mod Alert Test", "This is a test message, please disregard. Thank you for your cooperation."); }
+					if (m.Args.Contains("-t")) { m.sourceChannel.TryAlertMod("Mod Alert Test", "This is a test message, please disregard. Thank you for your cooperation."); }
 					else {
 						m.Reply(string.Format("Settings for channel '{0}': Control system {1}. Minimum age: {2}. Enforcement mode: {3}.", m.sourceChannel.Name, m.sourceChannel.minAge > 0 ? "enabled" : "disabled", m.sourceChannel.minAge, m.sourceChannel.underageResponse), IO.ReplyMode.AsOriginal);
 					}
 				}
 				try { Core.SaveAllSettingsBinary(); } //Core.SaveAllSettingsXML();
-				catch (Exception e) { Core.ErrorLog.Log(string.Format("Failed to save user data after changing settings for channel {1}, args {2} - {3}", m.sourceChannel, m.args, e.StackTrace)); }
+				catch (Exception e) { Core.ErrorLog.Log(string.Format("Failed to save user data after changing settings for channel {0}, args {1} - {2}", m.sourceChannel, m.Args, e.StackTrace)); }
 			}
 		}// plugin minage
 		sealed class ModQueue : CogitoPlugin {
@@ -403,20 +402,21 @@ namespace CogitoMini {
 			public override IHost Host { get { return Core.pluginHost; } }
 
 			public override void PluginMethod(Message m) {
-				bool modeRaw = m.args.Contains("-r") ? true : false;
-				m.args = m.args.Where(n => n != "-r").ToArray();
-				bool modeSay = m.args.Contains("-s") ? true : false;
-				m.args = m.args.Where(n => n != "-s").ToArray();
-				bool modeAct = m.args.Contains("-a") ? true : false;
-				m.args = m.args.Where(n => n != "-a").ToArray();
-				bool modePrivate = m.args.Contains("-p") ? true : false;
-				m.args = m.args.Where(n => n != "-p").ToArray();
+				bool modeRaw = m.Args.Contains("-r") ? true : false;
+				m.Args = m.Args.Where(n => n != "-r").ToArray();
+				bool modeSay = m.Args.Contains("-s") ? true : false;
+				m.Args = m.Args.Where(n => n != "-s").ToArray();
+				bool modeAct = m.Args.Contains("-a") ? true : false;
+				m.Args = m.Args.Where(n => n != "-a").ToArray();
+				bool modePrivate = m.Args.Contains("-p") ? true : false;
+				m.Args = m.Args.Where(n => n != "-p").ToArray();
 				if ((modeRaw ? 1 : 0) + (modeSay ? 1 : 0) + (modeAct ? 1 : 0) + (modePrivate ? 1 : 0) > 1) { m.Reply("One mode only, please!", ReplyMode.ForcePM); return; }
 				if (modePrivate) {
-					Message m2 = new Message(m);
-					m2.Recipient = Core.getUser(m.args[0]);
-					m2.args = m.args.Skip(1).ToArray();
-					m2.OpCode = "PRI";
+					Message m2 = new Message(m) {
+						Recipient = Core.getUser(m.Args[0]),
+						Args = m.Args.Skip(1).ToArray(),
+						OpCode = "PRI"
+					};
 					m2.Send();
 				}
 				if (modeRaw) { Core.websocket.Send(m.Body); return; }
@@ -438,12 +438,12 @@ namespace CogitoMini {
 			public override IHost Host { get { return Core.pluginHost; } }
 
 			public async override void PluginMethod(Message m) {
-				bool modeAnonymous = m.args.Contains("-a") ? true : false; //Are max and min named? Requires modeStatistic
-				bool modeStatistic = m.args.Contains("-s") ? true : false;
-				bool modeGreater = m.args.Contains("-gt") ? true : false;
-				bool modeLesser = m.args.Contains("-lt") ? true : false;
-				m.args = m.args.Where(n => n != "-a").ToArray();
-				m.args = m.args.Where(n => n != "-s").ToArray();
+				bool modeAnonymous = m.Args.Contains("-a") ? true : false; //Are max and min named? Requires modeStatistic
+				bool modeStatistic = m.Args.Contains("-s") ? true : false;
+				bool modeGreater = m.Args.Contains("-gt") ? true : false;
+				bool modeLesser = m.Args.Contains("-lt") ? true : false;
+				m.Args = m.Args.Where(n => n != "-a").ToArray();
+				m.Args = m.Args.Where(n => n != "-s").ToArray();
 
 				float cutoffValue = 0f;
 
@@ -451,10 +451,10 @@ namespace CogitoMini {
 				if (modeAnonymous && !modeStatistic) { m.Reply("Deactivating mode anonymous is only supported with mode statistic."); return; }
 				if ((modeLesser || modeGreater) && !modeStatistic) { modeStatistic = true; }
 				if (modeLesser || modeGreater) {
-					int cutoffPos = Array.IndexOf(m.args, modeLesser ? "-lt" : "-gt");
+					int cutoffPos = Array.IndexOf(m.Args, modeLesser ? "-lt" : "-gt");
 					if (cutoffPos >= 0) { 
-						cutoffValue = float.Parse(m.args[cutoffPos + 1]);
-						m.args = m.args.Take(Math.Max(cutoffPos - 1, 0)).Concat(m.args.Skip(cutoffPos + 1)).ToArray(); //Danger Will Robinson! why not just... idk, look for recognised args and make 'em a list or something? Switch statement.
+						cutoffValue = float.Parse(m.Args[cutoffPos + 1]);
+						m.Args = m.Args.Take(Math.Max(cutoffPos - 1, 0)).Concat(m.Args.Skip(cutoffPos + 1)).ToArray(); //Danger Will Robinson! why not just... idk, look for recognised args and make 'em a list or something? Switch statement.
 					}
 				}
 
@@ -504,10 +504,11 @@ namespace CogitoMini {
 			}
 
 			internal async Task<DataScan> ProcessNumericData(Dictionary<string, string> data) {
-				DataScan result = new DataScan();
-				result.values = new Dictionary<string, float>();
-				result.errorcount = 0;
-				result.nullcount = 0;
+				DataScan result = new DataScan() {
+					values = new Dictionary<string, float>(),
+					errorcount = 0,
+					nullcount = 0
+				};
 				await Task.Run(() => {
 					foreach (var item in data) {
 						System.Text.RegularExpressions.Match match = Utils.RegularExpressions.Numbers.Match(item.Value);
@@ -558,8 +559,8 @@ namespace CogitoMini {
 					Core.ErrorLog.Log("No channel attached to whitelist request: " + m.Body); 
 					return;
 				}
-				Core.SystemLog.Log(m.args.ToString(), true);
-				if (m.args.Length == 0) {
+				Core.SystemLog.Log(m.Args.ToString(), true);
+				if (m.Args.Length == 0) {
 					m.Reply("Current whitelist for Channel '" + m.sourceChannel.Name + "':\n" + string.Join(", ", m.sourceChannel.Whitelist).TrimEnd(','));
 					return;
 				}

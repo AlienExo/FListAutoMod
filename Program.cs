@@ -333,7 +333,7 @@ namespace CogitoMini
 
 			SystemLog.Log("Start up: CogitoMini v." + Config.AppSettings.Version);
 			SystemLog.Log("Loading Plugins...");
-			try{ Plugins.loadPlugins(); }
+			try{ Plugins.LoadPlugins(); }
 			catch (Exception e) { 
 				Console.WriteLine(e.ToString());
 				SystemLog.Log(e.ToString());
@@ -347,7 +347,13 @@ namespace CogitoMini
 
 			EternalSender = new Timer(SendMessageFromQueue, _sendForever, Timeout.Infinite, (long)IO.Message.chat_flood + 1);
 			LaplacesDemon = new Timer(ProcessCommandFromQueue, _sendForever, 0, 100);
-			
+
+			WebClient w = new WebClient();
+			//string InfoList = new StreamReader(w.OpenRead(Config.URLConstants.V1.AllData)).ReadToEnd();
+			string MappingList = new StreamReader(w.OpenRead(Config.URLConstants.V1.Mapping)).ReadToEnd();
+			//encoding strigns is so last year, let's have the fucking client interpret a fucking numerical map
+			//TODO build FListAPI.Response.Mapping object...
+
 			websocket = new WebSocket(string.Format("ws://{0}:{1}", XMLConfig["server"], XMLConfig["port"]));
 			websocket.MessageReceived += Core.OnWebsocketMessage;
 			websocket.Error += new EventHandler<SuperSocket.ClientEngine.ErrorEventArgs>(Core.OnWebsocketError);

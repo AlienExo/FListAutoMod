@@ -74,9 +74,10 @@ namespace CogitoMini
 				var _AllChannelData = AllChannelData.ToObject<List<Dictionary<string, object>>>();
 				for (int k = 0; k < _AllChannelData.Count; k++) {
 					Dictionary<string, object> currentChannel = _AllChannelData[k];
-					Channel ch = new Channel(currentChannel["name"].ToString());
-					ch.mode = (ChannelMode)Enum.Parse(typeof(ChannelMode), currentChannel["mode"].ToString());
-                }
+					Channel ch = new Channel(currentChannel["name"].ToString()) {
+						mode = (ChannelMode)Enum.Parse(typeof(ChannelMode), currentChannel["mode"].ToString())
+					};
+				}
 			}
 			catch (Exception e) { Core.ErrorLog.Log(String.Format("Error whilst parsing channel list: {0}\n\t{1} - {2}", e.Message, e.StackTrace, e.Data)); }
             new IO.SystemCommand("ORS").Send();            
@@ -133,7 +134,6 @@ namespace CogitoMini
 				StreamWriter fsw = new StreamWriter(fs);
 				DateTime Now = DateTime.Now;
 				fsw.Write(String.Format("{0}\t{1}\t{2}\t{3}\t{4}\tusers connected\r\n", Now.ToString("yyyy-MM-dd"), Now.ToString("HH:mm:ss"), Core.XMLConfig["server"], Core.XMLConfig["port"], C.Data["count"].ToString()));
-				fsw.Close();
 			}
 		}
 
@@ -465,7 +465,7 @@ namespace CogitoMini
 		
 		internal static void ProcessPossibleCommand(Message m) {
 			AccessPath accesspath = new AccessPath();
-			string TargetMethod = m.args[0];
+			string TargetMethod = m.Args[0];
 			
 			if (m.sourceChannel != null) {
 				//if (m.sourceChannel.Mods.Select(n => n._Name).Contains(m.sourceUser._Name)) { m.AccessLevel++; }
@@ -475,12 +475,12 @@ namespace CogitoMini
 			else { accesspath = AccessPath.PMOnly; }
 
 			if (TargetMethod.StartsWith(Config.AppSettings.TriggerPrefix) && Config.AITriggers.ContainsKey(TargetMethod)) {
-				m.args = m.args.Skip(1).ToArray(); //remove Trigger 
-				if (m.args.Length >= 2) {
+				m.Args = m.Args.Skip(1).ToArray(); //remove Trigger 
+				if (m.Args.Length >= 2) {
 					int chanIndex = -1;
-					if (m.args[m.args.Length - 2] == Config.AppSettings.RedirectOperator && int.TryParse(m.args[m.args.Length - 1], out chanIndex)) {
+					if (m.Args[m.Args.Length - 2] == Config.AppSettings.RedirectOperator && int.TryParse(m.Args[m.Args.Length - 1], out chanIndex)) {
 						if (chanIndex <= Core.joinedChannels.Count) { m.sourceChannel = Core.joinedChannels[chanIndex]; }
-						m.args = m.args.Take(m.args.Length - 2).ToArray();
+						m.Args = m.Args.Take(m.Args.Length - 2).ToArray();
 					}
 				}
 				if (Core.globalOps.Contains(m.sourceUser)) { m.AccessLevel = AccessLevel.GlobalOps; }
@@ -538,7 +538,7 @@ namespace CogitoMini
 			int totalIncidents = 0;
 			foreach (KeyValuePair<Channel, List<Incident>> Item in data) {
 				totalIncidents += Item.Value.Count;
-				FullMessage += string.Format("\n\t{0}: {1} incident(s). {3}", Item.Key.Name, Item.Value.Count, string.Join("\n\t\t", Item.Value.Select(n => n.ToString())));
+				FullMessage += string.Format("\n\t{0}: {1} incident(s). {2}", Item.Key.Name, Item.Value.Count, string.Join("\n\t\t", Item.Value.Select(n => n.ToString())));
 				FullMessage += "\n";
 			}
 			FullMessage = string.Format(FullMessage + "\nThank you for using Cogito.", totalIncidents);

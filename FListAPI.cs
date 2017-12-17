@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
+using System;
 
 namespace CogitoMini.FListAPI {
 	public class Item {
@@ -8,7 +9,7 @@ namespace CogitoMini.FListAPI {
 		public string value { get; set; }
 	}
 
-	public class ResponseMember { 
+	public class ResponseMember {
 		public string group { get; set; }
 		public List<Item> items { get; set; }
 	}
@@ -17,8 +18,73 @@ namespace CogitoMini.FListAPI {
 		public string error { get; set; }
 	}
 
+	public struct APIKink {
+		int id;
+		string name;
+		string description;
+		int group_id;
+	}
+
+	public struct APIKinkGroup {
+		int id;
+		string name;
+	}
+
+	public struct APIInfoTag {
+		int id;
+		string name;
+		string type;
+		List<string> list;
+		int group_id;
+	}
+
+	public struct APIInfolistItem {
+		int id;
+		string name;
+		string value;
+	}
+
+	public enum KinkValue : int { fave = 0, yes, maybe, no }
+
+	public struct CustomKink {
+		string name;
+		string description;
+		KinkValue choice;
+		List<string> children;
+	}
+
+	public class InlineImage {
+		public string hash;
+		public string extension;
+		public bool nsfw;
+	}
+
+	public class CharacterImage {
+		public int image_id;
+		public string extension;
+		public int height;
+		public int width;
+		public string description;
+		public int sort_order;
+	}
+
 	public class CharacterDataAPIv1 : CharacterResponseBase {
-		public Dictionary<int, ResponseMember> info { get; set; }
+		public int id{ get; set; }
+		public string name{ get; set; }
+		public string description{ get; set; }
+		public int views{ get; set; }
+		public bool customs_first{ get; set; }
+		public string custom_title{ get; set; }
+		public bool is_self{ get; set; }
+		public Dictionary<string, bool> settings{ get; set; }
+		public List<string> badges{ get; set; }
+		public DateTime created_at{ get; set; }
+		public DateTime updated_at{ get; set; }
+		public Dictionary<int, KinkValue> kinks{ get; set; }
+		public Dictionary<int, CustomKink> custom_kinks{ get; set; }
+		public Dictionary<int, string> infotags{ get; set; }
+		public Dictionary<int, InlineImage> inlines{ get; set; }
+		public Dictionary<int, CharacterImage> images{ get; set; }
 	}
 
 	public class Infotags {
@@ -66,14 +132,7 @@ namespace CogitoMini.FListAPI {
 		}
 	}
 
-	public class Kinks { 
-		public HashSet<string> Fave { get; set; }
-		public HashSet<string> Maybe { get; set; }
-		public HashSet<string> Yes { get; set; }
-		public HashSet<string> No { get; set; }
-	}
-
-	public class CustomKink { 
+	public class CustomKinkv2 { 
 		public string name { get; set; }
 		public string description { get; set; }
 	}
@@ -85,4 +144,10 @@ namespace CogitoMini.FListAPI {
 		public int created{ get; set; }
 		public Infotags infotags { get; set; }
 	}
+
+	internal static class Response {
+		static Dictionary<string, object> Mapping = new Dictionary<string, object>();
+	}
+	
 }
+

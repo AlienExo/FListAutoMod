@@ -9,12 +9,16 @@ namespace CogitoMini
 			internal const string Domain = @"https://www.f-list.net";
 
 			internal static class V1 {
+				
 				internal const string FListAPI = Domain + @"/json/api/";
-				internal const string CharacterInfo = FListAPI + @"character-info.php";         // Requires three parameters, "name", "account" and "ticket". 
+				// all Require, "account" and "ticket". 
+				internal const string CharacterInfo = FListAPI + @"character-data.php";         
 				internal const string ProfileText = FListAPI + @"character-get.php";            // Requires one parameter, "name". 
 				internal const string CharacterKinks = FListAPI + @"character-kinks.php";       // Requires one parameter, "name". 
 				internal const string IncomingFriendRequests = FListAPI + "request-list.php";
 				internal const string OutgoingFriendRequests = FListAPI + "request-pending.php";
+				internal const string AllData = FListAPI + "info-list.php";
+				internal const string Mapping = FListAPI + "mapping-list.php";
 
 				internal const string GetTicket = Domain + @"/json/getApiTicket.php";
 				internal const string Login = Domain + @"/action/script_login.php";

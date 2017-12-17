@@ -105,10 +105,11 @@ namespace CogitoMini {
 		public override string ToString() { return Name; }
 
 		public void Message(string message, string Opcode = "PRI") {
-			IO.Message m = new IO.Message();
-			m.Recipient = this;
-			m.OpCode = Opcode;
-			m.Body = message;
+			IO.Message m = new IO.Message() {
+				Recipient = this,
+				OpCode = Opcode,
+				Body = message
+			};
 			m.Send();
 		}
 
@@ -128,15 +129,15 @@ namespace CogitoMini {
 
 		public int CompareTo(object obj) {
 			if (obj == null) { return 1; }
-			User o = obj as User;
-			if (o != null) { return Name.CompareTo(o.Name); }
+			if (obj is User o) { return Name.CompareTo(o.Name); }
 			else { throw new ArgumentException("Object cannot be made into User. Cannot CompareTo()."); }
 		}
 
 		internal void Kick(Channel c) {
 			if (Core.OwnUser.IsChannelOp(c)) {
-				IO.SystemCommand s = new IO.SystemCommand();
-				s.OpCode = "CKU";
+				IO.SystemCommand s = new IO.SystemCommand() {
+					OpCode = "CKU"
+				};
 				s.Data["character"] = Name;
 				s.Data["channel"] = c.Key;
 				s.Send();
@@ -203,8 +204,9 @@ namespace CogitoMini {
 
 			WebClient w = new WebClient();
 			w.Headers = FormHeaders;
-			if (useAPIv2) { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv2>(System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData))); }
-			else { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv1>(System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData))); }
+			string Response = System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData));
+			if (useAPIv2) { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv2>(Response); }
+			else { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv1>(Response); }
 			
 			if (DataDigest.error.Length > 0) { //gotta go HTML
 				Console.WriteLine("API Error: " + DataDigest.error);
@@ -236,9 +238,10 @@ namespace CogitoMini {
 				}
 				else { //dirty ol' parsing
 					if (DataDigest.error.Length == 0) { //It's an API V1 parse and ProfileData is still empty
-						Members = ((FListAPI.CharacterDataAPIv1)DataDigest).info.SelectMany(n => n.Value.items);
-						ProfileData = Members.Select(x => new { x.name, x.value }).ToDictionary(y => y.name.ToLowerInvariant(), y => y.value);
-						data = ProfileData;
+						//Members = ((FListAPI.CharacterDataAPIv1)DataDigest).info.SelectMany(n => n.Value.items);
+						//ProfileData = Members.Select(x => new { x.name, x.value }).ToDictionary(y => y.name.ToLowerInvariant(), y => y.value);
+						//data = ProfileData;
+						//TODO translate 
 					}
 					else { ProfileData.Select(n => { data[n.Key] = n.Value; return n; }); }
 					if (ProfileData.ContainsKey("age")) {
