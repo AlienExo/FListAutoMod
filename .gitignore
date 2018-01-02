@@ -2,3 +2,4 @@ bin/
 obj/
 *.pfx
 chan1.txt
+/character-info.txt

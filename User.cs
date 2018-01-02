@@ -190,7 +190,7 @@ namespace CogitoMini {
 			Console.WriteLine("Entered GetBasicProfileInfo async...");
 			string targetAPI = useAPIv2 ? Config.URLConstants.V2.CharacterInfo : Config.URLConstants.V1.CharacterInfo;
 			Dictionary<string, string> ProfileData = new Dictionary<string, string>();
-			FListAPI.CharacterResponseBase DataDigest = new FListAPI.CharacterResponseBase();
+			FListAPI.CharacterDataAPIv1 DataDigest = new FListAPI.CharacterDataAPIv1();
 			IEnumerable<FListAPI.Item> Members = null;
 
 			System.Collections.Specialized.NameValueCollection FormData = new System.Collections.Specialized.NameValueCollection();
@@ -205,8 +205,11 @@ namespace CogitoMini {
 			WebClient w = new WebClient();
 			w.Headers = FormHeaders;
 			string Response = System.Text.Encoding.UTF8.GetString(await w.UploadValuesTaskAsync(targetAPI, "POST", FormData));
-			if (useAPIv2) { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv2>(Response); }
-			else { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv1>(Response); }
+			//if (useAPIv2) { DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv2>(Response); }
+			//else {
+				DataDigest = JsonConvert.DeserializeObject<FListAPI.CharacterDataAPIv1>(Response);
+			this.Age = DataDigest.infotags;
+			//}
 			
 			if (DataDigest.error.Length > 0) { //gotta go HTML
 				Console.WriteLine("API Error: " + DataDigest.error);
@@ -225,18 +228,18 @@ namespace CogitoMini {
 
 			//lock (UserLock) {
 				Age = 0;
-				if (useAPIv2) { //nice, direct parsing that isn't online yet because fuck you
-					FListAPI.Infotags CharInfo = ((FListAPI.CharacterDataAPIv2)DataDigest).infotags;
-					data = CharInfo.ToDictionary();
-					Age = CharInfo.Age;
-					Gender = CharInfo.Gender;
-					Orientation = CharInfo.Orientation;
-					//Height = Utils.Math.parseMeasurementFromDescription<float>(CharInfo.Height, Utils.Math.MeasurementUnit.Length);
-					Height = CharInfo.Height;
-					Position = CharInfo.Position;
-					Species = CharInfo.Species;
-				}
-				else { //dirty ol' parsing
+				//if (useAPIv2) { //nice, direct parsing that isn't online yet because fuck you
+				//	FListAPI.Infotags CharInfo = ((FListAPI.CharacterDataAPIv2)DataDigest).infotags;
+				//	data = CharInfo.ToDictionary();
+				//	Age = CharInfo.Age;
+				//	Gender = CharInfo.Gender;
+				//	Orientation = CharInfo.Orientation;
+				//	//Height = Utils.Math.parseMeasurementFromDescription<float>(CharInfo.Height, Utils.Math.MeasurementUnit.Length);
+				//	Height = CharInfo.Height;
+				//	Position = CharInfo.Position;
+				//	Species = CharInfo.Species;
+				//}
+				//else { //dirty ol' parsing
 					if (DataDigest.error.Length == 0) { //It's an API V1 parse and ProfileData is still empty
 						//Members = ((FListAPI.CharacterDataAPIv1)DataDigest).info.SelectMany(n => n.Value.items);
 						//ProfileData = Members.Select(x => new { x.name, x.value }).ToDictionary(y => y.name.ToLowerInvariant(), y => y.value);
@@ -248,7 +251,7 @@ namespace CogitoMini {
 						try { Age = int.Parse(Utils.RegularExpressions.AgeSearch.Match(ProfileData["age"]).Value); }    //remove all non-numerics from age string
 						catch (Exception) { }
 					}
-				}
+				//}
 				dataTakenOn = DateTime.Now; //sets the flag
 				hasData = true;
 				return true;

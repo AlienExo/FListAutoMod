@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Configuration;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -281,6 +282,8 @@ namespace CogitoMini
 		internal static List<User> globalOps = new List<CogitoMini.User>();
 		internal static Queue<SystemCommand> IncomingMessageQueue = new Queue<IO.SystemCommand>();
 		internal static Queue<SystemCommand> OutgoingMessageQueue = new Queue<IO.SystemCommand>();
+
+		internal static FListAPI.Mapping APIMapping = null;
 				
 		internal static void SendMessageFromQueue(object stateobject){ 
 			if (OutgoingMessageQueue.Count > 0){
@@ -350,10 +353,11 @@ namespace CogitoMini
 
 			WebClient w = new WebClient();
 			//string InfoList = new StreamReader(w.OpenRead(Config.URLConstants.V1.AllData)).ReadToEnd();
-			string MappingList = new StreamReader(w.OpenRead(Config.URLConstants.V1.Mapping)).ReadToEnd();
+			string MappingList = System.Web.HttpUtility.HtmlDecode(w.DownloadString(Config.URLConstants.V1.Mapping));
+			APIMapping = JsonConvert.DeserializeObject<FListAPI.Mapping>(MappingList);
+
 			//encoding strigns is so last year, let's have the fucking client interpret a fucking numerical map
 			//TODO build FListAPI.Response.Mapping object...
-
 			websocket = new WebSocket(string.Format("ws://{0}:{1}", XMLConfig["server"], XMLConfig["port"]));
 			websocket.MessageReceived += Core.OnWebsocketMessage;
 			websocket.Error += new EventHandler<SuperSocket.ClientEngine.ErrorEventArgs>(Core.OnWebsocketError);
